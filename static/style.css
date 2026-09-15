@@ -210,8 +210,9 @@ button { font: inherit; cursor: pointer; }
 .rec-row {
   display: flex; gap: 16px; background: var(--card); border-radius: var(--r);
   padding: 14px; box-shadow: var(--shadow); margin-bottom: 12px; cursor: pointer;
-  transition: transform 0.12s;
+  transition: transform 0.12s; position: relative;
 }
+.rec-row .fav-btn { top: 10px; right: 10px; left: auto; }
 .rec-row:hover { transform: translateX(3px); }
 .rec-img {
   width: 110px; min-width: 110px; height: 96px; border-radius: 12px; object-fit: cover;
@@ -254,6 +255,40 @@ button { font: inherit; cursor: pointer; }
   border-radius: var(--r); box-shadow: var(--shadow);
 }
 .empty .big { font-size: 44px; margin-bottom: 10px; }
+
+/* ---------- favorites ---------- */
+.fav-btn {
+  position: absolute; top: 10px; left: 10px; z-index: 2;
+  width: 34px; height: 34px; border-radius: 50%;
+  border: none; background: rgba(255, 255, 255, 0.92);
+  color: #c3d2da; font-size: 17px; line-height: 1;
+  box-shadow: var(--shadow); transition: transform 0.13s, color 0.13s;
+}
+.fav-btn:hover { transform: scale(1.12); }
+.fav-btn.on { color: #e0475b; }
+
+/* ---------- itinerary ---------- */
+.day-card {
+  background: var(--card); border-radius: var(--r);
+  box-shadow: var(--shadow); padding: 16px 20px; margin-bottom: 14px;
+}
+.day-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.day-num {
+  font-weight: 800; font-size: 14px; color: var(--sea-dark);
+  background: var(--sea-soft); padding: 4px 13px; border-radius: 999px; white-space: nowrap;
+}
+.day-area { font-weight: 600; font-size: 15px; }
+.day-tags { font-size: 12.5px; }
+.stop {
+  display: flex; gap: 12px; align-items: center;
+  padding: 9px 10px; border-radius: 10px; cursor: pointer; transition: background 0.12s;
+}
+.stop:hover { background: var(--sea-soft); }
+.slot { min-width: 122px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.stop-name { font-size: 14.5px; font-weight: 600; flex: 1; }
+.stop-h { font-size: 12.5px; white-space: nowrap; }
+.reserve-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.reserve-chips .chip-btn { cursor: pointer; }
 
 /* ---------- modal ---------- */
 .overlay {

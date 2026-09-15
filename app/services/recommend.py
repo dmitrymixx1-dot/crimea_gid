@@ -81,11 +81,75 @@ PROFILES = {
 }
 
 DAYS_BY_DURATION = {"1-2": 5, "3-5": 8, "6-10": 12, "10+": 16}
+ITINERARY_DAYS = {"1-2": 2, "3-5": 4, "6-10": 7, "10+": 12}
+
+AREA_LABEL = {
+    "Южный берег": "Южный берег",
+    "Центральный": "Центральный Крым",
+    "Восточный": "Восточный Крым",
+    "Западный": "Западный Крым",
+}
 
 SEASON_LABEL = {
     "summer": "летом", "spring": "весной", "autumn": "осенью",
     "winter": "зимой", "any": "в любое время года",
 }
+
+
+def plan_itinerary(recs: list[dict], duration_key: str) -> dict:
+    """Разложить рекомендации по дням: кластеризация по районам,
+    3 остановки максимум в день, «большие» места — на целый день."""
+    n_days = ITINERARY_DAYS.get(duration_key, 4)
+    by_area: dict[str, list[dict]] = {}
+    for r in recs:
+        by_area.setdefault(r.get("area", "Крым"), []).append(r)
+    for v in by_area.values():
+        v.sort(key=lambda x: -x.get("duration_h", 3))
+
+    days = []
+    for d in range(1, n_days + 1):
+        if not any(by_area.values()):
+            break
+        area = max(by_area, key=lambda a: len(by_area[a]))
+        pool = by_area[area]
+        stops: list[dict] = []
+        total_h = 0.0
+        while pool and len(stops) < 3 and total_h < 7:
+            it = pool[0]
+            h = it.get("duration_h", 3)
+            if h >= 6:  # «большая» точка — занимает весь день
+                it["slot"] = "full"
+                stops.append(it)
+                pool.pop(0)
+                break
+            it["slot"] = "morning" if not stops else "afternoon"
+            stops.append(it)
+            pool.pop(0)
+            total_h += h
+        if not stops:
+            break
+        if len(stops) > 1:
+            stops[0]["slot"] = "morning"
+            if stops[-1].get("duration_h", 3) <= 2.5:
+                stops[-1]["slot"] = "evening"
+            elif len(stops) == 2:
+                stops[-1]["slot"] = "afternoon"
+
+        tag_counts: dict[str, int] = {}
+        for s in stops:
+            for t in s.get("tags", []):
+                tag_counts[t] = tag_counts.get(t, 0) + 1
+        top_tags = [t for t, _ in sorted(tag_counts.items(), key=lambda kv: -kv[1])][:2]
+        days.append({
+            "day": d,
+            "area": area,
+            "area_label": AREA_LABEL.get(area, area),
+            "tags": top_tags,
+            "stops": stops,
+        })
+
+    reserve = [it for v in by_area.values() for it in v][:8]
+    return {"days": days, "reserve": reserve, "n_days": n_days}
 
 
 def _score_attraction(a: dict, ans: dict) -> tuple[float, list[str]]:
@@ -205,6 +269,7 @@ def evaluate(answers: dict, news_items: list[dict] | None = None) -> dict:
         "count": len(top),
         "days_hint": answers["duration"],
         "recommendations": [x[1] for x in top],
+        "itinerary": plan_itinerary([x[1] for x in top], answers["duration"]),
         "news": news,
         "transport_hint": transport_hint,
         "all_matched": len(scored),

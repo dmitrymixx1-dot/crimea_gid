@@ -20,7 +20,24 @@ const state = {
   quizResult: null,
   newsView: { topic: "all", onlyCrimea: true },
   newsLoading: false,
+  favs: new Set(),
+  planAutoDone: false,
 };
+
+/* ---------------- favorites ---------------- */
+function loadFavs() {
+  try { state.favs = new Set(JSON.parse(localStorage.getItem("crimea_favs") || "[]")); }
+  catch { state.favs = new Set(); }
+}
+function saveFavs() {
+  try { localStorage.setItem("crimea_favs", JSON.stringify([...state.favs])); } catch (e) {}
+}
+function toggleFav(id) {
+  if (state.favs.has(id)) state.favs.delete(id);
+  else state.favs.add(id);
+  saveFavs();
+  route();
+}
 
 /* ---------------- utils ---------------- */
 async function api(url, opts) {
@@ -56,6 +73,11 @@ function tagLabel(t) { return state.meta.tags[t] || t; }
 
 function budgetIcons(b) { return "₽".repeat(b) + `<span class="muted">${"₽".repeat(3 - b)}</span>`; }
 
+function favBtn(id) {
+  return `<button class="fav-btn ${state.favs.has(id) ? "on" : ""}" data-fav="${id}"
+    title="${state.favs.has(id) ? "Убрать из избранного" : "В избранное"}">♥</button>`;
+}
+
 /* ---------------- news ---------------- */
 async function loadNews(refresh = false) {
   state.news = await api(`/api/news?limit=50${refresh ? "&refresh=1" : ""}`);
@@ -86,6 +108,7 @@ function attractionCard(a) {
       <div class="card-img">
         <img src="/static/img/${meta.img}" alt="" loading="lazy"
              onerror="this.remove()" />
+        ${favBtn(a.id)}
         <div class="emoji">${meta.emoji}</div>
       </div>
       <div class="card-body">
@@ -123,6 +146,7 @@ function newsItemHTML(it) {
 /* ---------------- home ---------------- */
 function renderHome() {
   const top = [...state.attractions].sort((a, b) => b.rating - a.rating).slice(0, 4);
+  const favs = state.attractions.filter(a => state.favs.has(a.id));
   const n = state.news;
   const teaser = n
     ? n.items.filter(x => x.crimea_score > 0).slice(0, 3)
@@ -182,6 +206,14 @@ function renderHome() {
         <a class="btn btn-outline btn-sm" href="#/news">Все новости →</a>
       </div>
       ${teaser.length ? teaser.map(newsItemHTML).join("") : `<div class="empty"><div class="big">📭</div>Крымских новостей пока нет — загляните позже.</div>`}
+    </section>` : ""}
+  ${favs.length ? `
+    <section class="section">
+      <div class="section-head">
+        <h2>❤ В избранном</h2>
+        <span class="sub">${favs.length} мест — сохранено в вашем браузере</span>
+      </div>
+      <div class="grid">${favs.map(attractionCard).join("")}</div>
     </section>` : ""}
   `;
   bindCards();
@@ -305,6 +337,74 @@ async function submitQuiz() {
   }
 }
 
+const SLOT_META = {
+  morning: { icon: "⛅", label: "утро" },
+  afternoon: { icon: "🌤", label: "день" },
+  evening: { icon: "🌆", label: "вечер" },
+  full: { icon: "🗓", label: "целый день" },
+};
+
+function dayCard(day) {
+  const tags = (day.tags || []).map(t => tagLabel(t)).join(" · ");
+  return `
+    <div class="day-card">
+      <div class="day-head">
+        <span class="day-num">День ${day.day}</span>
+        <span class="day-area">${day.area_label}</span>
+        ${tags ? `<span class="day-tags muted">${tags}</span>` : ""}
+      </div>
+      ${day.stops.map(s => `
+        <div class="stop" data-id="${s.id}">
+          <span class="slot">${SLOT_META[s.slot]?.icon || "·"} ${SLOT_META[s.slot]?.label || s.slot}</span>
+          <span class="stop-name">${s.type_meta.emoji} ${s.name}</span>
+          <span class="muted stop-h">⏱ ${s.duration_h} ч</span>
+        </div>`).join("")}
+    </div>`;
+}
+
+function buildPlanLink() {
+  const a = state.quizResult.answers;
+  const s = [a.purpose.join(","), a.season, a.tempo, a.budget, a.party, a.duration, a.transport].join("~");
+  return location.origin + location.pathname + "#/quiz?plan=" + encodeURIComponent(s);
+}
+
+function parsePlanParam(str) {
+  const p = (str || "").split("~");
+  if (p.length !== 7) return null;
+  const purpose = p[0].split(",").filter(Boolean);
+  if (!purpose.length) return null;
+  return { purpose, season: p[1], tempo: p[2], budget: p[3], party: p[4], duration: p[5], transport: p[6] };
+}
+
+async function autoEvaluatePlan(plan) {
+  state.q.answers = plan;
+  view.innerHTML = `<div class="empty" style="margin-top:40px"><div class="big">🧮</div>Собираем ваш план…</div>`;
+  try {
+    state.quizResult = await api("/api/quiz/evaluate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(plan),
+    });
+    renderQuizResult();
+  } catch (e) {
+    state.planAutoDone = false;
+    renderQuiz();
+  }
+}
+
+function copyPlanLink() {
+  const url = buildPlanLink();
+  const done = () => toast("🔗 Ссылка на ваш план скопирована");
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(done, () => fallbackCopy(url, done));
+  else fallbackCopy(url, done);
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement("textarea");
+  ta.value = text; document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); done(); } catch (e) { toast(text); }
+  ta.remove();
+}
+
 function renderQuizResult() {
   const r = state.quizResult;
   const ansChips = state.quiz.questions.map(q => {
@@ -330,6 +430,7 @@ function renderQuizResult() {
       </div>
       ${r.recommendations.map(a => `
         <div class="rec-row" data-id="${a.id}">
+          ${favBtn(a.id)}
           <img class="rec-img" src="/static/img/${a.type_meta.img}" alt="" onerror="this.style.background='var(--sea-soft)'" />
           <div class="rec-body">
             <h3>${a.type_meta.emoji} ${a.name}</h3>
@@ -340,6 +441,19 @@ function renderQuizResult() {
           </div>
           <span class="rec-score">${a.score}</span>
         </div>`).join("")}
+      ${r.itinerary && r.itinerary.days.length ? `
+        <div class="section-head" style="margin-top:26px">
+          <h2 style="font-size:20px">🗺 План по дням</h2>
+          <span class="sub">районы сгруппированы, чтобы не бегать через весь полуостров</span>
+        </div>
+        ${r.itinerary.days.map(dayCard).join("")}
+        ${r.itinerary.reserve.length ? `
+          <div class="section-head" style="margin-top:20px">
+            <h3 style="margin:0;font-size:16px">🌧 Запасной вариант (дождь или «впритык»)</h3>
+          </div>
+          <div class="reserve-chips">
+            ${r.itinerary.reserve.map(s => `<button class="chip-btn" data-id="${s.id}">${s.type_meta.emoji} ${s.name}</button>`).join("")}
+          </div>` : ""}` : ""}
       ${r.news && r.news.length ? `
         <div class="section-head" style="margin-top:26px">
           <h2 style="font-size:20px">Новости по вашим интересам</h2>
@@ -347,15 +461,21 @@ function renderQuizResult() {
         ${r.news.map(newsItemHTML).join("")}` : ""}
       <div style="display:flex;gap:10px;margin-top:26px;flex-wrap:wrap">
         <button class="btn btn-primary" id="q-again">🔄 Пройти заново</button>
+        <button class="btn btn-outline" id="plan-copy">🔗 Скопировать ссылку на план</button>
         <a class="btn btn-outline" href="#/catalog">Открыть каталог</a>
       </div>
     </div>`;
   $$(".rec-row").forEach(el => el.addEventListener("click", () => openModal(el.dataset.id)));
+  $$(".stop[data-id], .reserve-chips [data-id]").forEach(el =>
+    el.addEventListener("click", () => openModal(el.dataset.id)));
   $("#q-again").addEventListener("click", () => {
     state.q = { step: 0, answers: {} };
     state.quizResult = null;
+    state.planAutoDone = false;
+    history.replaceState(null, "", location.pathname + "#/quiz");
     renderQuiz();
   });
+  $("#plan-copy").addEventListener("click", copyPlanLink);
 }
 
 /* ---------------- news ---------------- */
@@ -437,6 +557,10 @@ function renderNewsBody() {
 
 /* ---------------- modal ---------------- */
 function bindCards(root = view) {
+  $$("[data-fav]", root).forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    toggleFav(b.dataset.fav);
+  }));
   $$(".card[data-id], .rec-row[data-id]", root).forEach(el =>
     el.addEventListener("click", () => openModal(el.dataset.id)));
 }
@@ -481,10 +605,19 @@ function openModal(id) {
 
 /* ---------------- router / init ---------------- */
 function route() {
-  const { path } = hashParts();
+  const { path, query } = hashParts();
   $$(".nav a").forEach(a => a.classList.toggle("active", a.dataset.nav === path || (path === "home" && a.dataset.nav === "home")));
   if (path === "catalog") renderCatalog();
-  else if (path === "quiz") renderQuiz();
+  else if (path === "quiz") {
+    if (!state.quizResult && !state.planAutoDone) {
+      const parsed = parsePlanParam(query.get("plan"));
+      if (parsed) {
+        state.planAutoDone = true;
+        return autoEvaluatePlan(parsed);
+      }
+    }
+    renderQuiz();
+  }
   else if (path === "news") renderNews();
   else renderHome();
   window.scrollTo({ top: 0 });
@@ -494,6 +627,7 @@ window.addEventListener("hashchange", route);
 window.addEventListener("keydown", e => { if (e.key === "Escape") $("#modal-root").innerHTML = ""; });
 
 (async function init() {
+  loadFavs();
   try {
     const [meta, areas, attr, quiz] = await Promise.all([
       api("/api/tags"), api("/api/areas"), api("/api/attractions"), api("/api/quiz"),
