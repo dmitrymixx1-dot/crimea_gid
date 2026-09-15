@@ -256,6 +256,32 @@ button { font: inherit; cursor: pointer; }
 }
 .empty .big { font-size: 44px; margin-bottom: 10px; }
 
+/* ---------- map ---------- */
+.map-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.map-wrap {
+  background: var(--card); border-radius: 20px; box-shadow: var(--shadow);
+  padding: 10px; overflow: hidden;
+}
+.map-wrap svg { width: 100%; height: auto; display: block; }
+.sea-label {
+  fill: #4d8ba0; font-size: 17px; font-style: italic; opacity: 0.75;
+  text-anchor: middle; pointer-events: none;
+}
+.sea-label.small { font-size: 11px; }
+.city-label {
+  fill: #6b5d45; font-size: 12px; font-weight: 600;
+  text-anchor: middle; pointer-events: none;
+  paint-order: stroke; stroke: rgba(255,255,255,0.8); stroke-width: 3px;
+}
+.marker { cursor: pointer; }
+.marker:hover circle:nth-child(2) { stroke: var(--sea-dark); }
+.map-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
+.legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.legend-item i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+
 /* ---------- weather ---------- */
 .weather-strip { margin-top: 0; }
 .weather-grid {

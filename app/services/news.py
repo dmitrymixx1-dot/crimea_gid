@@ -87,6 +87,42 @@ def _clean_text(value: str, limit: int = 300) -> str:
     return value[:limit]
 
 
+# ---------------- Telegram: публичные превью t.me/s/<канал> ----------------
+def parse_telegram_page(page_html: str, channel: str) -> list[dict]:
+    """Парсинг публичной ленты канала без API-ключа.
+
+    t.me/s/<канал> отдаёт HTML с последними ~20 постами; каждый пост —
+    <div class="tgme_widget_message_wrap"> с текстом и <time datetime=…>.
+    """
+    items: list[dict] = []
+    chunks = re.split(r'<div class="tgme_widget_message_wrap', page_html)[1:]
+    for chunk in chunks:
+        m_time = re.search(r'<time datetime="([^"]+)"', chunk)
+        m_link = re.search(
+            r'href="(?:https?://t\.me/)?/?' + re.escape(channel) + r'\?before=(\d+)"',
+            chunk)
+        m_text = re.search(
+            r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>',
+            chunk, re.S)
+        if not m_text:
+            continue
+        text = re.sub(r"<br\s*/?>", " ", m_text.group(1))
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = html.unescape(re.sub(r"\s+", " ", text)).strip()
+        if len(text) < 10:  # пустые посты / картинки без подписи
+            continue
+        link = f"https://t.me/{channel}/{m_link.group(1)}" if m_link else f"https://t.me/{channel}"
+        items.append({
+            "title": text[:100] + ("…" if len(text) > 100 else ""),
+            "link": link,
+            "summary": text[:300],
+            "published": m_time.group(1) if m_time else "",
+        })
+        if len(items) >= 20:
+            break
+    return items
+
+
 def crimea_score(text: str) -> int:
     """Насколько новость про Крым: суммарное число совпадений маркеров."""
     t = " " + text.lower() + " "
@@ -151,6 +187,18 @@ class NewsService:
 
     # ------------------------------------------------------------------ fetch
     async def _fetch_feed(self, client: httpx.AsyncClient, src: dict) -> list[dict]:
+        if src.get("type") == "telegram":
+            channel = src["url"].rsplit("/", 1)[-1].strip()
+            resp = await client.get(
+                f"https://t.me/s/{channel}", follow_redirects=True)
+            resp.raise_for_status()
+            items = parse_telegram_page(resp.text, channel)
+            if not items:
+                raise RuntimeError(f"телеграм-канал «{channel}» пуст или недоступен")
+            return items
+        return await self._fetch_rss(client, src)
+
+    async def _fetch_rss(self, client: httpx.AsyncClient, src: dict) -> list[dict]:
         resp = await client.get(src["url"], follow_redirects=True)
         resp.raise_for_status()
         feed = feedparser.parse(resp.content)

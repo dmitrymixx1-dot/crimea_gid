@@ -23,6 +23,7 @@ const state = {
   favs: new Set(),
   planAutoDone: false,
   weather: null,
+  mapShowPlan: false,
 };
 
 /* ---------------- favorites ---------------- */
@@ -197,6 +198,7 @@ function renderHome() {
         <div class="hero-actions">
           <a class="btn btn-sun" href="#/quiz">🎯 Пройти квиз</a>
           <a class="btn btn-ghost" href="#/catalog">Смотреть каталог</a>
+          <a class="btn btn-ghost" href="#/map">🗺 Карта</a>
         </div>
         <div class="hero-stats">
           <span class="hero-stat">📍 ${state.attractions.length} мест</span>
@@ -662,11 +664,145 @@ function openModal(id) {
   document.body.style.overflow = "hidden";
 }
 
+/* ---------------- map ---------------- */
+const MAP = {
+  LNG0: 33.25, LAT0: 45.55, SX: 1000 / 3.35, SY: 380 / 1.30,
+  // Упрощённый (low-poly) контур полуострова: [lng, lat], по часовой стрелке
+  coast: [
+    [33.36, 44.39], [33.50, 44.35], [33.68, 44.47], [33.85, 44.50],
+    [33.95, 44.45], [34.06, 44.41], [34.13, 44.44], [34.23, 44.50],
+    [34.33, 44.60], [34.43, 44.70], [34.55, 44.62], [34.70, 44.70],
+    [34.90, 44.90], [35.05, 44.95], [35.13, 45.02], [35.30, 45.02],
+    [35.50, 44.98], [35.85, 45.00], [36.18, 45.06], [36.39, 45.02],
+    [36.47, 45.10], [36.45, 45.27], [36.52, 45.30], [36.42, 45.37],
+    [36.10, 45.38], [35.60, 45.33], [35.10, 45.25], [34.60, 45.45],
+    [34.10, 45.30], [33.80, 45.10], [33.60, 45.03], [33.48, 44.95],
+    [33.40, 44.80], [33.38, 44.62], [33.45, 44.50], [33.37, 44.44],
+  ],
+  sivash: [
+    [33.72, 45.08], [34.05, 45.05], [34.28, 44.95], [34.15, 44.78],
+    [33.92, 44.85], [33.75, 44.97],
+  ],
+  cities: [
+    ["Севастополь", 33.52, 44.72], ["Симферополь", 34.10, 44.88],
+    ["Ялта", 34.17, 44.56], ["Керчь", 36.40, 45.42],
+    ["Феодосия", 36.22, 45.02], ["Судак", 36.42, 44.97],
+    ["Алушта", 34.43, 44.78], ["Коктебель", 35.11, 45.14],
+    ["Евпатория", 34.65, 45.13], ["Саки", 33.62, 45.06],
+  ],
+};
+MAP.px = lng => (lng - MAP.LNG0) * MAP.SX;
+MAP.py = lat => (MAP.LAT0 - lat) * MAP.SY;
+
+const TYPE_COLORS = {
+  beach: "#f59e0b", castle: "#8b5cf6", palace: "#6366f1", winery: "#991b1b",
+  nature: "#15803d", park: "#4d7c0f", city: "#0284c7", spa: "#0f766e",
+  food: "#c2410c", museum: "#7e22ce", active: "#b45309", factory: "#db2777",
+};
+
+function renderMap() {
+  const typeBtns = Object.keys(state.meta.tags).map(t => `
+    <button class="chip-btn ${state.f.tag === t ? "active" : ""}" data-tag="${t}">${tagLabel(t)}</button>`).join("");
+  const hasPlan = !!state.quizResult;
+  view.innerHTML = `
+    <div class="section">
+      <div class="section-head">
+        <h2>🗺 Карта Крыма</h2>
+        <span class="sub">Схема полуострова — клик по точке открывает карточку места</span>
+      </div>
+      <div class="map-toolbar">
+        <div class="filter-row" id="map-tags">${typeBtns}</div>
+        <button class="btn btn-outline btn-sm" id="map-plan" ${hasPlan ? "" : "disabled"}
+          title="${hasPlan ? "Показать маршрут плана по дням" : "Сначала пройдите квиз"}">
+          🗓 Мой план
+        </button>
+      </div>
+      <div class="map-wrap">
+        <svg id="crimea-map" viewBox="0 0 1000 380" role="img" aria-label="Схема Крыма с точками"></svg>
+      </div>
+      <div class="map-legend" id="map-legend"></div>
+    </div>`;
+  $$("#map-tags .chip-btn").forEach(b => b.addEventListener("click", () => {
+    state.f.tag = state.f.tag === b.dataset.tag ? "" : b.dataset.tag;
+    renderMap();
+  }));
+  $("#map-plan").addEventListener("click", () => {
+    state.mapShowPlan = !state.mapShowPlan;
+    drawMap();
+  });
+  drawMap();
+}
+
+function drawMap() {
+  const svg = $("#crimea-map");
+  if (!svg) return;
+  const pts = arr => arr.map(([lng, lat]) =>
+    `${MAP.px(lng).toFixed(1)},${MAP.py(lat).toFixed(1)}`).join(" ");
+  const items = state.attractions.filter(
+    a => !state.f.tag || a.tags.includes(state.f.tag));
+
+  const markers = items.map(a => {
+    const meta = state.meta.types[a.type] || { emoji: "📍" };
+    const color = TYPE_COLORS[a.type] || "#64748b";
+    const fav = state.favs.has(a.id) ? ' class="fav-ring"' : "";
+    return `<g class="marker" data-id="${a.id}"
+        transform="translate(${MAP.px(a.lng).toFixed(1)},${MAP.py(a.lat).toFixed(1)})">
+      <title>${a.name} — ${a.region}</title>
+      <circle${fav} r="14" fill="none" stroke="#e0475b" stroke-width="2" opacity="${state.favs.has(a.id) ? 1 : 0}"/>
+      <circle r="11" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <text y="4.5" text-anchor="middle" font-size="11" pointer-events="none">${meta.emoji}</text>
+    </g>`;
+  }).join("");
+
+  let planLayer = "";
+  if (state.mapShowPlan && state.quizResult) {
+    const stops = state.quizResult.itinerary.days.flatMap(d => d.stops);
+    planLayer = `
+      <polyline points="${stops.map(s =>
+        `${MAP.px(s.lng).toFixed(1)},${MAP.py(s.lat).toFixed(1)}`).join(" ")}"
+        fill="none" stroke="#f5a524" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.9"/>
+      ${stops.map((s, i) => `<g transform="translate(${MAP.px(s.lng).toFixed(1)},${MAP.py(s.lat).toFixed(1)})" pointer-events="none">
+        <circle r="8" fill="#f5a524" stroke="#fff" stroke-width="2"/>
+        <text y="3.5" text-anchor="middle" font-size="9" font-weight="700" fill="#3a2a05">${i + 1}</text>
+      </g>`).join("")}`;
+  }
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#c3e6ef"/>
+        <stop offset="1" stop-color="#a8d8e8"/>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="1000" height="380" fill="url(#sea)" rx="18"/>
+    <polygon points="${pts(MAP.coast)}" fill="#f5eddb" stroke="#cbb98e" stroke-width="2.5" stroke-linejoin="round"/>
+    <polygon points="${pts(MAP.sivash)}" fill="#b9dde9" stroke="#8fc3d4" stroke-width="1.5"/>
+    <text class="sea-label" x="430" y="352">Чёрное море</text>
+    <text class="sea-label" x="838" y="26">Азовское море</text>
+    <text class="sea-label" x="176" y="190">Сиваш</text>
+    <text class="sea-label small" x="912" y="98">Керченский пролив</text>
+    ${MAP.cities.map(([n, lng, lat]) =>
+      `<text class="city-label" x="${MAP.px(lng).toFixed(1)}" y="${MAP.py(lat).toFixed(1)}">${n}</text>`).join("")}
+    ${markers}
+    <g id="plan-layer">${planLayer}</g>`;
+
+  // легенда: только типы, представленные в текущей выборке
+  const types = [...new Set(items.map(a => a.type))].sort();
+  $("#map-legend").innerHTML = types.map(t => {
+    const meta = state.meta.types[t] || { emoji: "📍", label: t };
+    return `<span class="legend-item"><i style="background:${TYPE_COLORS[t] || "#64748b"}"></i>${meta.emoji} ${meta.label}</span>`;
+  }).join("") + `<span class="legend-item"><i style="background:transparent;border:2px solid #e0475b;border-radius:50%"></i>❤ избранное</span>`;
+
+  $$(".marker", svg).forEach(g =>
+    g.addEventListener("click", () => openModal(g.dataset.id)));
+}
+
 /* ---------------- router / init ---------------- */
 function route() {
   const { path, query } = hashParts();
   $$(".nav a").forEach(a => a.classList.toggle("active", a.dataset.nav === path || (path === "home" && a.dataset.nav === "home")));
   if (path === "catalog") renderCatalog();
+  else if (path === "map") renderMap();
   else if (path === "quiz") {
     if (!state.quizResult && !state.planAutoDone) {
       const parsed = parsePlanParam(query.get("plan"));
