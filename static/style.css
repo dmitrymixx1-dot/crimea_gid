@@ -379,12 +379,49 @@ button { font: inherit; cursor: pointer; }
   font-size: 14px; box-shadow: var(--shadow-lg); animation: pop 0.2s;
 }
 
+/* ---------- news search ---------- */
+.news-search { flex: 0 1 240px; min-width: 180px; padding: 8px 14px; }
+
 /* ---------- responsive ---------- */
 @media (max-width: 720px) {
-  .nav a { padding: 6px 9px; font-size: 13.5px; }
+  .nav { display: none; position: absolute; top: 60px; left: 0; right: 0;
+    flex-direction: column; background: var(--card); gap: 0; padding: 8px;
+    border-bottom: 1px solid var(--line); box-shadow: var(--shadow-lg); }
+  .nav.open { display: flex; }
+  .nav a { padding: 12px 16px; font-size: 15px; border-radius: 10px; }
+  #nav-toggle { display: inline-flex; }
   .brand span.brand-wave { display: none; }
   .hero { min-height: 360px; }
   .hero-content { padding: 24px; }
   .facts { grid-template-columns: 1fr; }
   .rec-img { width: 84px; min-width: 84px; height: 78px; }
+  .news-search { flex: 1 1 100%; }
+}
+
+#nav-toggle {
+  display: none; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 10px; border: 1.5px solid var(--line);
+  background: var(--card); font-size: 19px; color: var(--sea-dark);
+}
+
+/* ---------- print: только план (body.print-plan) ---------- */
+@media print {
+  body.print-plan .site-header,
+  body.print-plan .site-footer,
+  body.print-plan #toast-root,
+  body.print-plan #modal-root,
+  body.print-plan .btn,
+  body.print-plan .fav-btn { display: none !important; }
+
+  body.print-plan { background: #fff; }
+  body.print-plan .quiz-shell { max-width: 100%; }
+  body.print-plan .profile-card {
+    background: #fff; color: var(--ink);
+    box-shadow: none; border: 1.5px solid var(--line);
+  }
+  body.print-plan .day-card, body.print-plan .rec-row, body.print-plan .news-item {
+    box-shadow: none; border: 1px solid var(--line);
+    break-inside: avoid;
+  }
+  body.print-plan .rec-row { cursor: default; }
 }

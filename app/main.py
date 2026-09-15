@@ -3,7 +3,7 @@
 Запуск:
     uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -63,6 +63,17 @@ async def attractions(
     return {"count": len(items), "items": items}
 
 
+@app.get("/api/attractions/{attraction_id}")
+async def attraction_detail(attraction_id: str):
+    """Одна точка каталога — нужна фронту для прямых ссылок #/place/<id>
+    и внешним потребителям API."""
+    for a in get_attractions():
+        if a["id"] == attraction_id:
+            return {**a, "type_meta": TYPE_META.get(
+                a["type"], {"emoji": "📍", "label": a["type"], "img": "cat_nature.jpg"})}
+    raise HTTPException(status_code=404, detail=f"место «{attraction_id}» не найдено")
+
+
 @app.get("/api/areas")
 async def areas():
     areas = sorted({a.get("area", "") for a in get_attractions()})
@@ -100,6 +111,17 @@ async def weather(city: str | None = None, refresh: bool = False):
 # Статичный фронт (SPA)
 # --------------------------------------------------------------------------
 app.mount("/static", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+
+
+@app.get("/sw.js")
+async def service_worker():
+    """SW отдаём из корня, чтобы его scope был '/'
+    (из /static/ он не управлял бы навигацией SPA)."""
+    return FileResponse(
+        STATIC_DIR / "sw.js",
+        media_type="text/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"},
+    )
 
 
 @app.get("/")
