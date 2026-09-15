@@ -1,0 +1,32 @@
+[
+  {
+    "id": "tass",
+    "name": "ТАСС",
+    "url": "https://tass.ru/rss/v2.xml",
+    "description": "Федеральное новостное агентство"
+  },
+  {
+    "id": "rbc",
+    "name": "РБК",
+    "url": "https://rssexport.rbc.ru/rbcnews/news/30/full.rss",
+    "description": "Новости экономики и общества"
+  },
+  {
+    "id": "newsru",
+    "name": "News.ru",
+    "url": "https://news.ru/rss",
+    "description": "Общие новости дня"
+  },
+  {
+    "id": "kriminform",
+    "name": "КРИМ-ИНФОРМ",
+    "url": "https://www.kriminform.ru/rss/allnews.xml",
+    "description": "Крупнейшее крымское новостное агентство"
+  },
+  {
+    "id": "crimedigital",
+    "name": "Крым.Цифровой",
+    "url": "https://crimedigital.ru/rss/all-news.xml",
+    "description": "Крымский региональный портал"
+  }
+]
