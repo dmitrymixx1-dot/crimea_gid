@@ -8,6 +8,7 @@
 import asyncio
 import calendar
 import html
+import json
 import re
 import time
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from datetime import datetime, timezone
 import feedparser
 import httpx
 
+from .. import config
 from ..config import MAX_NEWS_ITEMS, NEWS_CACHE_TTL, NEWS_HTTP_TIMEOUT, USER_AGENT
 from .load import get_snapshot, get_sources
 
@@ -23,18 +25,30 @@ from .load import get_snapshot, get_sources
 # даём 2 очка релевантности.
 # --------------------------------------------------------------------------
 CRIMEA_WORDS = {
-    "крым", "крыма", "крыме", "крымский", "крымская", "крымское",
-    "таврида", "таврический", "кафа",
-    "севастополь", "севастополя", "симферополь", "симферополя",
-    "керчь", "керченский", "ялта", "ялтинский", "ялтинской",
-    "феодосия", "феодосийский", "судак", "судакской",
-    "евпатория", "евпаторийский", "алушта", "алуштинский",
-    "алупка", "гурзуф", "гаспра", "ореанда", "форос", "массандра",
-    "коктебель", "ленино", "бахчисарай", "бахчисарайский",
-    "черноморское", "демерджи", "инкерман", "мисхор", "херсонес",
-    "старокрымск", "сарыч", "капчак", "лазурное", "миндальное",
+    "крым", "крыма", "крыме", "крымский", "крымская", "крымское", "крымчан",
+    "севастополь", "севастополя", "севастополе", "севастопольский",
+    "симферополь", "симферополя", "симферополе", "симферопольский",
+    "керчь", "керчи", "керченский", "керченская",
+    "ялта", "ялты", "ялте", "ялтинский", "ялтинской",
+    "феодосия", "феодосии", "феодосийский",
+    "судак", "судака", "судаке", "судакский", "судакской",
+    "евпатория", "евпатории", "евпаторийский",
+    "алушта", "алушты", "алуште", "алуштинский",
+    "алупка", "алупки", "алупке",
+    "гурзуф", "гурзуфа", "гурзуфе",
+    "гаспра", "ореанда", "ореанды", "ореанде",
+    "форос", "фороса", "форосе",
+    "массандра", "массандры", "массандре",
+    "коктебель", "коктебеля", "коктебельский",
+    "бахчисарай", "бахчисарая", "бахчисарае", "бахчисарайский",
+    "черноморское", "черноморский", "демерджи",
+    "инкерман", "инкермана", "инкермане",
+    "мисхор", "мисхора", "мисхоре",
+    "херсонес", "херсонеса", "херсонесе",
+    "старокрымск",  # подстрока: Старокрымск(ий/ая/ом)
+    "сарыч", "капчак", "лазурное", "миндальное",
     "джанкой", "белогорск", "нижнегорск", "красноперекопск",
-    "перевальное", "санаторное", "сакский", "сасык", "голубая гавань",
+    "перевальное", "санаторное", "сакский", "сасык",
 }
 
 # «крым*» по токенам (чтобы не ловить «криминал»).
@@ -101,6 +115,39 @@ class NewsService:
     def __init__(self) -> None:
         self._sources = get_sources()
         self._cache: dict = {"ts": 0.0, "online": False, "items": [], "failed": []}
+        self._load_file_cache()
+
+    # ------------------------------------------------------- file cache
+    def _load_file_cache(self) -> None:
+        """Подхватываем последнюю успешную ленту с диска (переживает рестарт)."""
+        try:
+            if not config.NEWS_CACHE_FILE.exists():
+                return
+            data = json.loads(config.NEWS_CACHE_FILE.read_text(encoding="utf-8"))
+            if data.get("ts") and time.time() - data["ts"] < config.NEWS_CACHE_TTL * 4:
+                self._cache = {
+                    "ts": data["ts"],
+                    "online": data.get("online", False),
+                    "failed": data.get("failed", []),
+                    "items": data.get("items", []),
+                }
+        except Exception:
+            pass
+
+    def _save_file_cache(self) -> None:
+        try:
+            config.NEWS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            config.NEWS_CACHE_FILE.write_text(
+                json.dumps({
+                    "ts": self._cache["ts"],
+                    "online": self._cache["online"],
+                    "failed": self._cache["failed"],
+                    "items": self._cache["items"],
+                }, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------ fetch
     async def _fetch_feed(self, client: httpx.AsyncClient, src: dict) -> list[dict]:
@@ -210,6 +257,7 @@ class NewsService:
                 "failed": failed or [s["name"] for s in self._sources],
                 "items": items,
             }
+        self._save_file_cache()
         return self.payload()
 
     def payload(self) -> dict:

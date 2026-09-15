@@ -8,12 +8,21 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .config import STATIC_DIR
+from .config import APP_VERSION, STATIC_DIR
 from .services.load import get_attractions, get_quiz
 from .services.news import news_service
 from .services.recommend import TAGS, TYPE_META, evaluate
+from .services.weather import weather_service
 
-app = FastAPI(title="Крым.Гид", version="1.0.0")
+app = FastAPI(title="Крым.Гид", version=APP_VERSION)
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return response
 
 
 class QuizIn(BaseModel):
@@ -28,7 +37,7 @@ class QuizIn(BaseModel):
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "name": "Крым.Гид"}
+    return {"ok": True, "name": "Крым.Гид", "version": APP_VERSION}
 
 
 @app.get("/api/tags")
@@ -80,6 +89,11 @@ async def news(limit: int = Query(40, ge=1, le=100),
     out = dict(data)
     out["items"] = items
     return out
+
+
+@app.get("/api/weather")
+async def weather(city: str | None = None, refresh: bool = False):
+    return await weather_service.get(city=city, refresh=refresh)
 
 
 # --------------------------------------------------------------------------

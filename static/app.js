@@ -22,6 +22,7 @@ const state = {
   newsLoading: false,
   favs: new Set(),
   planAutoDone: false,
+  weather: null,
 };
 
 /* ---------------- favorites ---------------- */
@@ -144,6 +145,37 @@ function newsItemHTML(it) {
 }
 
 /* ---------------- home ---------------- */
+function weatherStrip() {
+  const w = state.weather;
+  if (!w) return "";
+  const cities = (w.cities || []).filter(c => c.available);
+  if (!cities.length) {
+    return `
+    <section class="section weather-strip">
+      <div class="section-head"><h2>🌤 Погода на курортах</h2></div>
+      <p class="muted" style="margin:0">Погода сейчас недоступна — попробуйте позже.</p>
+    </section>`;
+  }
+  return `
+    <section class="section weather-strip">
+      <div class="section-head">
+        <h2>🌤 Погода на курортах</h2>
+        <span class="sub">Open-Meteo · обновление раз в час</span>
+      </div>
+      <div class="weather-grid">
+        ${cities.map(c => `
+          <div class="w-city" title="${c.current.label}, ветер ${c.current.wind} км/ч">
+            <div class="w-name">${c.name}</div>
+            <div class="w-main">${c.current.emoji} <b>${c.current.temp > 0 ? "+" : ""}${c.current.temp}°</b></div>
+            <div class="w-forecast">
+              ${c.forecast.slice(1, 4).map(f =>
+                `<span class="w-day" title="${f.day}">${f.day} ${f.emoji} ${f.max > 0 ? "+" : ""}${f.max}°</span>`).join("")}
+            </div>
+          </div>`).join("")}
+      </div>
+    </section>`;
+}
+
 function renderHome() {
   const top = [...state.attractions].sort((a, b) => b.rating - a.rating).slice(0, 4);
   const favs = state.attractions.filter(a => state.favs.has(a.id));
@@ -174,6 +206,7 @@ function renderHome() {
       </div>
     </section>
 
+    ${weatherStrip()}
     <section class="section">
       <div class="section-head">
         <h2>Ваш профиль отдыха</h2>
@@ -398,6 +431,30 @@ function copyPlanLink() {
   if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(done, () => fallbackCopy(url, done));
   else fallbackCopy(url, done);
 }
+
+function planAsText() {
+  const r = state.quizResult;
+  const lines = [`🌊 Крым.Гид — ${r.profile.emoji} ${r.profile.title}`, ""];
+  for (const d of r.itinerary.days) {
+    lines.push(`День ${d.day} · ${d.area_label}`);
+    for (const s of d.stops) {
+      lines.push(`  ${SLOT_META[s.slot].icon} ${SLOT_META[s.slot].label}: ${s.name} (⏱ ${s.duration_h} ч)`);
+    }
+    lines.push("");
+  }
+  if (r.itinerary.reserve.length) {
+    lines.push("Запас на дождь или «впритык»:");
+    r.itinerary.reserve.slice(0, 8).forEach(s => lines.push(`  • ${s.name}`));
+  }
+  lines.push("", "Собрано в Крым.Гид: " + location.origin + location.pathname);
+  return lines.join("\n");
+}
+
+function copyPlanText() {
+  const done = () => toast("📋 План скопирован текстом");
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(planAsText()).then(done, () => fallbackCopy(planAsText(), done));
+  else fallbackCopy(planAsText(), done);
+}
 function fallbackCopy(text, done) {
   const ta = document.createElement("textarea");
   ta.value = text; document.body.appendChild(ta); ta.select();
@@ -461,7 +518,8 @@ function renderQuizResult() {
         ${r.news.map(newsItemHTML).join("")}` : ""}
       <div style="display:flex;gap:10px;margin-top:26px;flex-wrap:wrap">
         <button class="btn btn-primary" id="q-again">🔄 Пройти заново</button>
-        <button class="btn btn-outline" id="plan-copy">🔗 Скопировать ссылку на план</button>
+        <button class="btn btn-outline" id="plan-copy">🔗 Скопировать ссылку</button>
+        <button class="btn btn-outline" id="plan-text">📋 План текстом</button>
         <a class="btn btn-outline" href="#/catalog">Открыть каталог</a>
       </div>
     </div>`;
@@ -476,6 +534,7 @@ function renderQuizResult() {
     renderQuiz();
   });
   $("#plan-copy").addEventListener("click", copyPlanLink);
+  $("#plan-text").addEventListener("click", copyPlanText);
 }
 
 /* ---------------- news ---------------- */
@@ -641,6 +700,11 @@ window.addEventListener("keydown", e => { if (e.key === "Escape") $("#modal-root
     return;
   }
   try { await loadNews(); } catch (e) { /* badge останется в дефолте */ }
+  api("/api/weather").then(d => { state.weather = d; route(); }).catch(() => {});
+  api("/api/health").then(d => {
+    const el = document.getElementById("app-version");
+    if (el && d.version) el.textContent = "v" + d.version;
+  }).catch(() => {});
   route();
   setInterval(() => { if (!document.hidden && state.news) loadNews().catch(() => {}); }, 10 * 60 * 1000);
 })();

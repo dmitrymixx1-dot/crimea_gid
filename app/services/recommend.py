@@ -148,7 +148,7 @@ def plan_itinerary(recs: list[dict], duration_key: str) -> dict:
             "stops": stops,
         })
 
-    reserve = [it for v in by_area.values() for it in v][:8]
+    reserve = [it for v in by_area.values() for it in v]
     return {"days": days, "reserve": reserve, "n_days": n_days}
 
 

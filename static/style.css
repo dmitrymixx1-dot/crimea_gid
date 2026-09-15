@@ -256,6 +256,26 @@ button { font: inherit; cursor: pointer; }
 }
 .empty .big { font-size: 44px; margin-bottom: 10px; }
 
+/* ---------- weather ---------- */
+.weather-strip { margin-top: 0; }
+.weather-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+}
+.w-city {
+  background: var(--card); border-radius: 14px; padding: 12px 14px;
+  box-shadow: var(--shadow); cursor: default; transition: transform 0.12s;
+}
+.w-city:hover { transform: translateY(-2px); }
+.w-name { font-size: 12.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.w-main { font-size: 15px; margin: 4px 0 8px; }
+.w-main b { font-size: 22px; }
+.w-forecast { display: flex; gap: 8px; flex-wrap: wrap; }
+.w-day {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  background: #f2f7f9; border-radius: 8px; padding: 3px 7px; white-space: nowrap;
+}
+
 /* ---------- favorites ---------- */
 .fav-btn {
   position: absolute; top: 10px; left: 10px; z-index: 2;
