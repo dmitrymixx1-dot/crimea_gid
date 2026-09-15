@@ -20,7 +20,7 @@ jobs:
       - name: JS syntax check
         run: node --check static/app.js
       - name: Test suite
-        run: pytest tests/ -q
+        run: python -m pytest -q
 
   docker:
     runs-on: ubuntu-latest
