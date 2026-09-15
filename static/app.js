@@ -1,0 +1,846 @@
+/* ============ Крым.Гид — SPA ============ */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const view = $("#view");
+
+const TOPIC_LABELS = {
+  beach: "🏖️ Пляжи", weather: "🌤️ Погода", transport: "🚗 Транспорт",
+  events: "🎉 События", food: "🍷 Гастро", safety: " Безопасность",
+  history: "🏛️ История",
+};
+
+const state = {
+  meta: { tags: {}, types: {} },
+  attractions: [],
+  areas: [],
+  quiz: null,
+  news: null,
+  f: { q: "", area: "", tag: "" },
+  q: { step: 0, answers: {} },
+  quizResult: null,
+  newsView: { topic: "all", onlyCrimea: true },
+  newsLoading: false,
+  favs: new Set(),
+  planAutoDone: false,
+  weather: null,
+  mapShowPlan: false,
+};
+
+/* ---------------- favorites ---------------- */
+function loadFavs() {
+  try { state.favs = new Set(JSON.parse(localStorage.getItem("crimea_favs") || "[]")); }
+  catch { state.favs = new Set(); }
+}
+function saveFavs() {
+  try { localStorage.setItem("crimea_favs", JSON.stringify([...state.favs])); } catch (e) {}
+}
+function toggleFav(id) {
+  if (state.favs.has(id)) state.favs.delete(id);
+  else state.favs.add(id);
+  saveFavs();
+  route();
+}
+
+/* ---------------- utils ---------------- */
+async function api(url, opts) {
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+function toast(msg, ms = 3200) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = msg;
+  $("#toast-root").appendChild(el);
+  setTimeout(() => el.remove(), ms);
+}
+
+function fmtTime(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const hm = d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === new Date().toDateString()) return `сегодня, ${hm}`;
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+}
+
+function hashParts() {
+  const h = location.hash.replace(/^#\/?/, "");
+  const [path, query = ""] = h.split("?");
+  return { path: path || "home", query: new URLSearchParams(query) };
+}
+
+function tagLabel(t) { return state.meta.tags[t] || t; }
+
+function budgetIcons(b) { return "₽".repeat(b) + `<span class="muted">${"₽".repeat(3 - b)}</span>`; }
+
+function favBtn(id) {
+  return `<button class="fav-btn ${state.favs.has(id) ? "on" : ""}" data-fav="${id}"
+    title="${state.favs.has(id) ? "Убрать из избранного" : "В избранное"}">♥</button>`;
+}
+
+/* ---------------- news ---------------- */
+async function loadNews(refresh = false) {
+  state.news = await api(`/api/news?limit=50${refresh ? "&refresh=1" : ""}`);
+  updateNetBadge();
+}
+
+function updateNetBadge() {
+  const b = $("#net-badge");
+  if (!state.news) return;
+  if (state.news.online) {
+    b.className = "badge badge-ok badge-dot";
+    b.textContent = "live";
+    b.title = `Источники на связи. Обновлено: ${fmtTime(state.news.updated_at)}`;
+  } else {
+    b.className = "badge badge-warn badge-dot";
+    b.textContent = "офлайн";
+    b.title = "RSS-ленты недоступны из вашей сети — показываем кэш";
+  }
+}
+
+/* ---------------- cards ---------------- */
+function attractionCard(a) {
+  const meta = state.meta.types[a.type] || { emoji: "📍", img: "cat_nature.jpg" };
+  const chips = a.tags.slice(0, 3)
+    .map(t => `<span class="chip">${tagLabel(t)}</span>`).join("");
+  return `
+    <article class="card" data-id="${a.id}">
+      <div class="card-img">
+        <img src="/static/img/${meta.img}" alt="" loading="lazy"
+             onerror="this.remove()" />
+        ${favBtn(a.id)}
+        <div class="emoji">${meta.emoji}</div>
+      </div>
+      <div class="card-body">
+        <h3 class="card-title">${a.name}</h3>
+        <div class="card-region">📍 ${a.region}</div>
+        <p class="card-desc">${a.description}</p>
+        <div class="card-chips">${chips}</div>
+        <div class="card-meta">
+          <span><span class="star">★</span> <b>${a.rating.toFixed(1)}</b></span>
+          <span>${budgetIcons(a.budget)}</span>
+          <span>⏱ ${a.duration_h} ч</span>
+        </div>
+      </div>
+    </article>`;
+}
+
+function newsItemHTML(it) {
+  const topics = (it.topics || [])
+    .map(t => `<span class="chip ${t === "safety" ? "chip-sun" : ""}">${TOPIC_LABELS[t] || t}</span>`)
+    .join("");
+  return `
+    <div class="news-item">
+      <div class="news-left">
+        <span class="source-badge">${it.source}</span>
+        <span class="news-time">${fmtTime(it.published)}</span>
+      </div>
+      <div class="news-body">
+        <h3 class="news-title"><a href="${it.link}" target="_blank" rel="noopener">${it.title}</a></h3>
+        ${it.summary ? `<p class="news-summary">${it.summary}</p>` : ""}
+        ${topics ? `<div class="news-topics">${topics}</div>` : ""}
+      </div>
+    </div>`;
+}
+
+/* ---------------- home ---------------- */
+function weatherStrip() {
+  const w = state.weather;
+  if (!w) return "";
+  const cities = (w.cities || []).filter(c => c.available);
+  if (!cities.length) {
+    return `
+    <section class="section weather-strip">
+      <div class="section-head"><h2>🌤 Погода на курортах</h2></div>
+      <p class="muted" style="margin:0">Погода сейчас недоступна — попробуйте позже.</p>
+    </section>`;
+  }
+  return `
+    <section class="section weather-strip">
+      <div class="section-head">
+        <h2>🌤 Погода на курортах</h2>
+        <span class="sub">Open-Meteo · обновление раз в час</span>
+      </div>
+      <div class="weather-grid">
+        ${cities.map(c => `
+          <div class="w-city" title="${c.current.label}, ветер ${c.current.wind} км/ч">
+            <div class="w-name">${c.name}</div>
+            <div class="w-main">${c.current.emoji} <b>${c.current.temp > 0 ? "+" : ""}${c.current.temp}°</b></div>
+            <div class="w-forecast">
+              ${c.forecast.slice(1, 4).map(f =>
+                `<span class="w-day" title="${f.day}">${f.day} ${f.emoji} ${f.max > 0 ? "+" : ""}${f.max}°</span>`).join("")}
+            </div>
+          </div>`).join("")}
+      </div>
+    </section>`;
+}
+
+function renderHome() {
+  const top = [...state.attractions].sort((a, b) => b.rating - a.rating).slice(0, 4);
+  const favs = state.attractions.filter(a => state.favs.has(a.id));
+  const n = state.news;
+  const teaser = n
+    ? n.items.filter(x => x.crimea_score > 0).slice(0, 3)
+    : [];
+  const cats = [
+    ["beach", "cat_beach.jpg"], ["history", "cat_history.jpg"], ["nature", "cat_nature.jpg"],
+    ["wine", "cat_wine.jpg"], ["family", "cat_family.jpg"], ["active", "cat_active.jpg"],
+  ];
+  view.innerHTML = `
+    <section class="hero">
+      <img src="/static/img/hero.jpg" alt="Южный берег Крыма" onerror="this.style.display='none'" />
+      <div class="hero-content">
+        <h1>Крым подскажет,<br />куда вам сходить</h1>
+        <p>Пройдите квиз за минуту — соберём маршрут под ваши интересы.
+           А ещё — каталог проверенных мест и живая лента новостей полуострова.</p>
+        <div class="hero-actions">
+          <a class="btn btn-sun" href="#/quiz">🎯 Пройти квиз</a>
+          <a class="btn btn-ghost" href="#/catalog">Смотреть каталог</a>
+          <a class="btn btn-ghost" href="#/map">🗺 Карта</a>
+        </div>
+        <div class="hero-stats">
+          <span class="hero-stat">📍 ${state.attractions.length} мест</span>
+          <span class="hero-stat">❓ ${state.quiz ? state.quiz.questions.length : 7} вопросов</span>
+          <span class="hero-stat">📰 ${n ? n.sources.length : 5} источников новостей</span>
+        </div>
+      </div>
+    </section>
+
+    ${weatherStrip()}
+    <section class="section">
+      <div class="section-head">
+        <h2>Ваш профиль отдыха</h2>
+        <span class="sub">Выберите настроение — откроется каталог по теме</span>
+      </div>
+      <div class="grid">
+        ${cats.map(([t, img]) => `
+          <a class="card cat-tile" href="#/catalog?tag=${t}" style="text-decoration:none">
+            <div class="card-img"><img src="/static/img/${img}" alt="" loading="lazy" onerror="this.remove()"/></div>
+            <div class="card-body">
+              <h3 class="card-title">${tagLabel(t)}</h3>
+              <div class="card-region">места с тегом «${t}»</div>
+            </div>
+          </a>`).join("")}
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <h2>Выбранное путешественников</h2>
+        <a class="btn btn-outline btn-sm" href="#/catalog">Весь каталог →</a>
+      </div>
+      <div class="grid">${top.map(attractionCard).join("")}</div>
+    </section>
+
+    ${n ? `
+    <section class="section">
+      <div class="section-head">
+        <h2>Свежее с полуострова</h2>
+        <a class="btn btn-outline btn-sm" href="#/news">Все новости →</a>
+      </div>
+      ${teaser.length ? teaser.map(newsItemHTML).join("") : `<div class="empty"><div class="big">📭</div>Крымских новостей пока нет — загляните позже.</div>`}
+    </section>` : ""}
+  ${favs.length ? `
+    <section class="section">
+      <div class="section-head">
+        <h2>❤ В избранном</h2>
+        <span class="sub">${favs.length} мест — сохранено в вашем браузере</span>
+      </div>
+      <div class="grid">${favs.map(attractionCard).join("")}</div>
+    </section>` : ""}
+  `;
+  bindCards();
+}
+
+/* ---------------- catalog ---------------- */
+function renderCatalog() {
+  const { path, query } = hashParts();
+  const presetTag = query.get("tag") || "";
+  if (presetTag) state.f.tag = presetTag;
+  const tagBtns = Object.keys(state.meta.tags).map(t => `
+    <button class="chip-btn ${state.f.tag === t ? "active" : ""}" data-tag="${t}">${tagLabel(t)}</button>`).join("");
+  view.innerHTML = `
+    <div class="section">
+      <div class="section-head"><h2>Каталог мест</h2><span class="count-note" id="cat-count"></span></div>
+      <div class="filters">
+        <div class="filter-row">
+          <input class="search" id="cat-search" placeholder="Поиск: Ласточкино, вино, пляж…" value="${state.f.q}" />
+          <select class="select" id="cat-area">
+            <option value="">Вся география</option>
+            ${state.areas.map(a => `<option ${state.f.area === a ? "selected" : ""}>${a}</option>`).join("")}
+          </select>
+        </div>
+        <div class="filter-row" id="cat-tags">${tagBtns}</div>
+      </div>
+      <div class="grid" id="cat-grid"></div>
+    </div>`;
+  $("#cat-search").addEventListener("input", e => { state.f.q = e.target.value; renderCatGrid(); });
+  $("#cat-area").addEventListener("change", e => { state.f.area = e.target.value; renderCatGrid(); });
+  $$("#cat-tags .chip-btn").forEach(b => b.addEventListener("click", () => {
+    state.f.tag = state.f.tag === b.dataset.tag ? "" : b.dataset.tag;
+    renderCatalog();
+  }));
+  renderCatGrid();
+}
+
+function renderCatGrid() {
+  const grid = $("#cat-grid");
+  if (!grid) return;
+  const q = state.f.q.toLowerCase();
+  const items = state.attractions.filter(a =>
+    (!state.f.area || a.area === state.f.area) &&
+    (!state.f.tag || a.tags.includes(state.f.tag)) &&
+    (!q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)));
+  grid.innerHTML = items.length
+    ? items.map(attractionCard).join("")
+    : `<div class="empty" style="grid-column:1/-1"><div class="big">🔍</div>Ничего не нашлось. Попробуйте убрать фильтры.</div>`;
+  $("#cat-count").textContent = `Найдено: ${items.length}`;
+  bindCards(grid);
+}
+
+/* ---------------- quiz ---------------- */
+function renderQuiz() {
+  if (state.quizResult) return renderQuizResult();
+  const qs = state.quiz.questions;
+  const idx = state.q.step;
+  const q = qs[idx];
+  const ans = state.q.answers[q.id];
+  const isMulti = q.type === "multi";
+  const options = q.options.map(o => {
+    const sel = isMulti ? (ans || []).includes(o.id) : ans === o.id;
+    return `
+      <button class="option ${sel ? "selected" : ""}" data-opt="${o.id}">
+        <span class="o-emoji">${o.emoji}</span>
+        <span><span class="o-label">${o.label}</span>
+        ${o.hint ? `<div class="o-hint">${o.hint}</div>` : ""}</span>
+      </button>`;
+  }).join("");
+  const pct = Math.round((idx / qs.length) * 100);
+  view.innerHTML = `
+    <div class="quiz-shell">
+      <div class="section-head" style="margin-bottom:0"><h2>Квиз</h2>
+        <span class="sub">${q.subtitle || ""}</span></div>
+      <div class="progress"><div style="width:${pct}%"></div></div>
+      <div class="quiz-card">
+        <div class="quiz-emoji">${q.emoji}</div>
+        <h2>${q.title}</h2>
+        <div class="options">${options}</div>
+        ${isMulti ? `<div class="max-note">Выберите до ${q.max} — можно менять выбор</div>` : ""}
+        <div class="quiz-nav">
+          <button class="btn btn-outline btn-sm" id="q-back" ${idx === 0 ? "disabled" : ""}>← Назад</button>
+          <span class="quiz-step">${idx + 1} / ${qs.length}</span>
+          ${isMulti ? `<button class="btn btn-primary btn-sm" id="q-next" ${!(ans || []).length ? "disabled" : ""}>Далее →</button>` : ""}
+        </div>
+      </div>
+    </div>`;
+  $$(".option").forEach(b => b.addEventListener("click", () => {
+    const id = b.dataset.opt;
+    if (isMulti) {
+      const cur = new Set(ans || []);
+      if (cur.has(id)) cur.delete(id);
+      else if (cur.size >= q.max) { toast(`Максимум ${q.max} варианта`); return; }
+      else cur.add(id);
+      state.q.answers[q.id] = [...cur];
+    } else {
+      state.q.answers[q.id] = id;
+      setTimeout(() => { state.q.step++; renderQuiz(); }, 180);
+      return;
+    }
+    renderQuiz();
+  }));
+  const back = $("#q-back"), next = $("#q-next");
+  if (back) back.addEventListener("click", () => { state.q.step--; renderQuiz(); });
+  if (next) next.addEventListener("click", submitQuiz);
+}
+
+async function submitQuiz() {
+  const btn = $("#q-next");
+  if (btn) { btn.disabled = true; btn.textContent = "Считаем…"; }
+  try {
+    state.quizResult = await api("/api/quiz/evaluate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(state.q.answers),
+    });
+    location.hash = "#/quiz";
+    renderQuiz();
+  } catch (e) {
+    toast("Не удалось посчитать рекомендации");
+    if (btn) { btn.disabled = false; btn.textContent = "Далее →"; }
+  }
+}
+
+const SLOT_META = {
+  morning: { icon: "⛅", label: "утро" },
+  afternoon: { icon: "🌤", label: "день" },
+  evening: { icon: "🌆", label: "вечер" },
+  full: { icon: "🗓", label: "целый день" },
+};
+
+function dayCard(day) {
+  const tags = (day.tags || []).map(t => tagLabel(t)).join(" · ");
+  return `
+    <div class="day-card">
+      <div class="day-head">
+        <span class="day-num">День ${day.day}</span>
+        <span class="day-area">${day.area_label}</span>
+        ${tags ? `<span class="day-tags muted">${tags}</span>` : ""}
+      </div>
+      ${day.stops.map(s => `
+        <div class="stop" data-id="${s.id}">
+          <span class="slot">${SLOT_META[s.slot]?.icon || "·"} ${SLOT_META[s.slot]?.label || s.slot}</span>
+          <span class="stop-name">${s.type_meta.emoji} ${s.name}</span>
+          <span class="muted stop-h">⏱ ${s.duration_h} ч</span>
+        </div>`).join("")}
+    </div>`;
+}
+
+function buildPlanLink() {
+  const a = state.quizResult.answers;
+  const s = [a.purpose.join(","), a.season, a.tempo, a.budget, a.party, a.duration, a.transport].join("~");
+  return location.origin + location.pathname + "#/quiz?plan=" + encodeURIComponent(s);
+}
+
+function parsePlanParam(str) {
+  const p = (str || "").split("~");
+  if (p.length !== 7) return null;
+  const purpose = p[0].split(",").filter(Boolean);
+  if (!purpose.length) return null;
+  return { purpose, season: p[1], tempo: p[2], budget: p[3], party: p[4], duration: p[5], transport: p[6] };
+}
+
+async function autoEvaluatePlan(plan) {
+  state.q.answers = plan;
+  view.innerHTML = `<div class="empty" style="margin-top:40px"><div class="big">🧮</div>Собираем ваш план…</div>`;
+  try {
+    state.quizResult = await api("/api/quiz/evaluate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(plan),
+    });
+    renderQuizResult();
+  } catch (e) {
+    state.planAutoDone = false;
+    renderQuiz();
+  }
+}
+
+function copyPlanLink() {
+  const url = buildPlanLink();
+  const done = () => toast("🔗 Ссылка на ваш план скопирована");
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(done, () => fallbackCopy(url, done));
+  else fallbackCopy(url, done);
+}
+
+function planAsText() {
+  const r = state.quizResult;
+  const lines = [`🌊 Крым.Гид — ${r.profile.emoji} ${r.profile.title}`, ""];
+  for (const d of r.itinerary.days) {
+    lines.push(`День ${d.day} · ${d.area_label}`);
+    for (const s of d.stops) {
+      lines.push(`  ${SLOT_META[s.slot].icon} ${SLOT_META[s.slot].label}: ${s.name} (⏱ ${s.duration_h} ч)`);
+    }
+    lines.push("");
+  }
+  if (r.itinerary.reserve.length) {
+    lines.push("Запас на дождь или «впритык»:");
+    r.itinerary.reserve.slice(0, 8).forEach(s => lines.push(`  • ${s.name}`));
+  }
+  lines.push("", "Собрано в Крым.Гид: " + location.origin + location.pathname);
+  return lines.join("\n");
+}
+
+function copyPlanText() {
+  const done = () => toast("📋 План скопирован текстом");
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(planAsText()).then(done, () => fallbackCopy(planAsText(), done));
+  else fallbackCopy(planAsText(), done);
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement("textarea");
+  ta.value = text; document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); done(); } catch (e) { toast(text); }
+  ta.remove();
+}
+
+function renderQuizResult() {
+  const r = state.quizResult;
+  const ansChips = state.quiz.questions.map(q => {
+    const v = r.answers[q.id];
+    if (!v) return "";
+    const opts = (Array.isArray(v) ? v : [v])
+      .map(id => q.options.find(o => o.id === id)?.label)
+      .filter(Boolean).join(" · ");
+    return `<span class="hero-stat">${q.emoji} ${opts}</span>`;
+  }).join("");
+  view.innerHTML = `
+    <div class="quiz-shell" style="max-width:760px">
+      <div class="profile-card">
+        <div class="p-emoji">${r.profile.emoji}</div>
+        <h2>${r.profile.title}</h2>
+        <p>${r.profile.summary}</p>
+        <div class="hero-stats" style="margin-top:16px">${ansChips}</div>
+      </div>
+      <div class="hint-box">${r.transport_hint}</div>
+      <div class="section-head">
+        <h2 style="font-size:20px">Вам подобрали ${r.count} мест</h2>
+        <span class="sub">на ${r.days_hint} день(и), из ${r.all_matched} подходящих</span>
+      </div>
+      ${r.recommendations.map(a => `
+        <div class="rec-row" data-id="${a.id}">
+          ${favBtn(a.id)}
+          <img class="rec-img" src="/static/img/${a.type_meta.img}" alt="" onerror="this.style.background='var(--sea-soft)'" />
+          <div class="rec-body">
+            <h3>${a.type_meta.emoji} ${a.name}</h3>
+            <div class="rec-region">📍 ${a.region} · ⏱ ${a.duration_h} ч · <span class="star">★</span> ${a.rating.toFixed(1)}</div>
+            <div class="rec-reasons">
+              ${a.reasons.map(x => `<span class="chip">${x}</span>`).join("")}
+            </div>
+          </div>
+          <span class="rec-score">${a.score}</span>
+        </div>`).join("")}
+      ${r.itinerary && r.itinerary.days.length ? `
+        <div class="section-head" style="margin-top:26px">
+          <h2 style="font-size:20px">🗺 План по дням</h2>
+          <span class="sub">районы сгруппированы, чтобы не бегать через весь полуостров</span>
+        </div>
+        ${r.itinerary.days.map(dayCard).join("")}
+        ${r.itinerary.reserve.length ? `
+          <div class="section-head" style="margin-top:20px">
+            <h3 style="margin:0;font-size:16px">🌧 Запасной вариант (дождь или «впритык»)</h3>
+          </div>
+          <div class="reserve-chips">
+            ${r.itinerary.reserve.map(s => `<button class="chip-btn" data-id="${s.id}">${s.type_meta.emoji} ${s.name}</button>`).join("")}
+          </div>` : ""}` : ""}
+      ${r.news && r.news.length ? `
+        <div class="section-head" style="margin-top:26px">
+          <h2 style="font-size:20px">Новости по вашим интересам</h2>
+        </div>
+        ${r.news.map(newsItemHTML).join("")}` : ""}
+      <div style="display:flex;gap:10px;margin-top:26px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="q-again">🔄 Пройти заново</button>
+        <button class="btn btn-outline" id="plan-copy">🔗 Скопировать ссылку</button>
+        <button class="btn btn-outline" id="plan-text">📋 План текстом</button>
+        <a class="btn btn-outline" href="#/catalog">Открыть каталог</a>
+      </div>
+    </div>`;
+  $$(".rec-row").forEach(el => el.addEventListener("click", () => openModal(el.dataset.id)));
+  $$(".stop[data-id], .reserve-chips [data-id]").forEach(el =>
+    el.addEventListener("click", () => openModal(el.dataset.id)));
+  $("#q-again").addEventListener("click", () => {
+    state.q = { step: 0, answers: {} };
+    state.quizResult = null;
+    state.planAutoDone = false;
+    history.replaceState(null, "", location.pathname + "#/quiz");
+    renderQuiz();
+  });
+  $("#plan-copy").addEventListener("click", copyPlanLink);
+  $("#plan-text").addEventListener("click", copyPlanText);
+}
+
+/* ---------------- news ---------------- */
+async function renderNews(refresh = false) {
+  if (refresh) state.newsLoading = true;
+  view.innerHTML = `
+    <div class="section">
+      <div class="news-head">
+        <div>
+          <h2 style="margin:0">Новости Крыма</h2>
+          <div class="news-status">
+            <span id="news-badge" class="badge badge-muted">загружаем…</span>
+            <span class="muted" id="news-upd"></span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <div class="filter-row">
+            <button class="chip-btn ${state.newsView.onlyCrimea ? "active" : ""}" data-nv="crimea">🌊 Крым</button>
+            <button class="chip-btn ${!state.newsView.onlyCrimea ? "active" : ""}" data-nv="all">Все ленты</button>
+          </div>
+          <button class="btn btn-outline btn-sm" id="news-refresh" ${state.newsLoading ? "disabled" : ""}>
+            ${state.newsLoading ? "Обновляем…" : "↻ Обновить"}
+          </button>
+        </div>
+      </div>
+      <div id="news-offline"></div>
+      <div class="filter-row" id="news-topics" style="margin-bottom:16px"></div>
+      <div id="news-list"></div>
+    </div>`;
+  $("#news-refresh").addEventListener("click", () => renderNews(true));
+  $$("#news-head [data-nv]").forEach(b => b.addEventListener("click", () => {
+    state.newsView.onlyCrimea = b.dataset.nv === "crimea";
+    renderNews();
+  }));
+
+  try {
+    if (refresh) await loadNews(true);
+    else if (!state.news) await loadNews();
+  } catch (e) {
+    $("#news-list").innerHTML = `<div class="empty"><div class="big">⚠️</div>Не удалось получить новости: ${e.message}</div>`;
+    return;
+  }
+  renderNewsBody();
+}
+
+function renderNewsBody() {
+  const n = state.news;
+  const badge = $("#news-badge");
+  if (n.online) {
+    badge.className = "badge badge-ok badge-dot";
+    badge.textContent = "live";
+    const failed = n.failed_sources.length ? ` · упало: ${n.failed_sources.length}` : "";
+    $("#news-upd").textContent = `обновлено ${fmtTime(n.updated_at)}${failed}`;
+  } else {
+    badge.className = "badge badge-warn badge-dot";
+    badge.textContent = "офлайн";
+    $("#news-upd").textContent = `кэш от ${fmtTime(n.updated_at)}`;
+    $("#news-offline").innerHTML = `
+      <div class="hint-box" style="margin-bottom:16px">
+        📡 RSS-ленты сейчас недоступны из вашей сети — показываем кэшированные материалы.
+        Крымская секция в офлайн-режиме — <b>демонстрационные</b> примеры; при подключении сети придут свежие новости.
+      </div>`;
+  }
+  const pool = n.items.filter(x => !state.newsView.onlyCrimea || x.crimea_score > 0);
+  const topics = ["all", ...new Set(pool.flatMap(x => x.topics || []))];
+  $("#news-topics").innerHTML = topics.map(t => `
+    <button class="chip-btn ${state.newsView.topic === t ? "active" : ""}" data-t="${t}">
+      ${t === "all" ? "Все темы" : TOPIC_LABELS[t] || t}</button>`).join("");
+  $$("#news-topics .chip-btn").forEach(b => b.addEventListener("click", () => {
+    state.newsView.topic = b.dataset.t;
+    renderNewsBody();
+  }));
+  const items = pool.filter(x => state.newsView.topic === "all"
+    || (x.topics || []).includes(state.newsView.topic));
+  $("#news-list").innerHTML = items.length
+    ? items.map(newsItemHTML).join("")
+    : `<div class="empty"><div class="big">📭</div>По этой теме пока пусто.</div>`;
+}
+
+/* ---------------- modal ---------------- */
+function bindCards(root = view) {
+  $$("[data-fav]", root).forEach(b => b.addEventListener("click", e => {
+    e.stopPropagation();
+    toggleFav(b.dataset.fav);
+  }));
+  $$(".card[data-id], .rec-row[data-id]", root).forEach(el =>
+    el.addEventListener("click", () => openModal(el.dataset.id)));
+}
+
+function openModal(id) {
+  const a = state.attractions.find(x => x.id === id);
+  if (!a) return;
+  const meta = state.meta.types[a.type] || { emoji: "📍", img: "cat_nature.jpg" };
+  const mapUrl = "https://yandex.ru/maps/?text=" + encodeURIComponent(`Крым, ${a.name}`);
+  $("#modal-root").innerHTML = `
+    <div class="overlay" id="overlay">
+      <div class="modal">
+        <div class="modal-img">
+          <img src="/static/img/${meta.img}" alt="" onerror="this.style.display='none'" />
+          <button class="modal-close" id="m-close" aria-label="Закрыть">✕</button>
+        </div>
+        <div class="modal-body">
+          <h2>${meta.emoji} ${a.name}</h2>
+          <div class="muted">📍 ${a.region} · ${a.area}</div>
+          <p style="margin-top:12px">${a.description}</p>
+          <div class="facts">
+            <div class="fact"><span class="k">Сезон</span>${a.season.map(s => ({ summer: "☀️ лето", spring: "🌸 весна", autumn: "🍂 осень", winter: "❄️ зима" }[s] || s)).join(", ")}</div>
+            <div class="fact"><span class="k">Бюджет</span>${budgetIcons(a.budget)} · ${a.price_hint}</div>
+            <div class="fact"><span class="k">Длительность</span>≈ ${a.duration_h} ч</div>
+            <div class="fact"><span class="k">Рейтинг</span><span class="star">★</span> ${a.rating.toFixed(1)} / 5</div>
+          </div>
+          <div class="card-chips">${a.tags.map(t => `<span class="chip">${tagLabel(t)}</span>`).join("")}</div>
+          <div class="tip">💡 ${a.tips}</div>
+          <div class="modal-actions">
+            <a class="btn btn-primary btn-sm" href="${mapUrl}" target="_blank" rel="noopener">🗺 Открыть на карте</a>
+            <button class="btn btn-outline btn-sm" id="m-close2">Закрыть</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  const close = () => { $("#modal-root").innerHTML = ""; document.body.style.overflow = ""; };
+  $("#m-close").addEventListener("click", close);
+  $("#m-close2").addEventListener("click", close);
+  $("#overlay").addEventListener("click", e => { if (e.target.id === "overlay") close(); });
+  document.body.style.overflow = "hidden";
+}
+
+/* ---------------- map ---------------- */
+const MAP = {
+  LNG0: 33.25, LAT0: 45.55, SX: 1000 / 3.35, SY: 380 / 1.30,
+  // Упрощённый (low-poly) контур полуострова: [lng, lat], по часовой стрелке
+  coast: [
+    [33.36, 44.39], [33.50, 44.35], [33.68, 44.47], [33.85, 44.50],
+    [33.95, 44.45], [34.06, 44.41], [34.13, 44.44], [34.23, 44.50],
+    [34.33, 44.60], [34.43, 44.70], [34.55, 44.62], [34.70, 44.70],
+    [34.90, 44.90], [35.05, 44.95], [35.13, 45.02], [35.30, 45.02],
+    [35.50, 44.98], [35.85, 45.00], [36.18, 45.06], [36.39, 45.02],
+    [36.47, 45.10], [36.45, 45.27], [36.52, 45.30], [36.42, 45.37],
+    [36.10, 45.38], [35.60, 45.33], [35.10, 45.25], [34.60, 45.45],
+    [34.10, 45.30], [33.80, 45.10], [33.60, 45.03], [33.48, 44.95],
+    [33.40, 44.80], [33.38, 44.62], [33.45, 44.50], [33.37, 44.44],
+  ],
+  sivash: [
+    [33.72, 45.08], [34.05, 45.05], [34.28, 44.95], [34.15, 44.78],
+    [33.92, 44.85], [33.75, 44.97],
+  ],
+  cities: [
+    ["Севастополь", 33.52, 44.72], ["Симферополь", 34.10, 44.88],
+    ["Ялта", 34.17, 44.56], ["Керчь", 36.40, 45.42],
+    ["Феодосия", 36.22, 45.02], ["Судак", 36.42, 44.97],
+    ["Алушта", 34.43, 44.78], ["Коктебель", 35.11, 45.14],
+    ["Евпатория", 34.65, 45.13], ["Саки", 33.62, 45.06],
+  ],
+};
+MAP.px = lng => (lng - MAP.LNG0) * MAP.SX;
+MAP.py = lat => (MAP.LAT0 - lat) * MAP.SY;
+
+const TYPE_COLORS = {
+  beach: "#f59e0b", castle: "#8b5cf6", palace: "#6366f1", winery: "#991b1b",
+  nature: "#15803d", park: "#4d7c0f", city: "#0284c7", spa: "#0f766e",
+  food: "#c2410c", museum: "#7e22ce", active: "#b45309", factory: "#db2777",
+};
+
+function renderMap() {
+  const typeBtns = Object.keys(state.meta.tags).map(t => `
+    <button class="chip-btn ${state.f.tag === t ? "active" : ""}" data-tag="${t}">${tagLabel(t)}</button>`).join("");
+  const hasPlan = !!state.quizResult;
+  view.innerHTML = `
+    <div class="section">
+      <div class="section-head">
+        <h2>🗺 Карта Крыма</h2>
+        <span class="sub">Схема полуострова — клик по точке открывает карточку места</span>
+      </div>
+      <div class="map-toolbar">
+        <div class="filter-row" id="map-tags">${typeBtns}</div>
+        <button class="btn btn-outline btn-sm" id="map-plan" ${hasPlan ? "" : "disabled"}
+          title="${hasPlan ? "Показать маршрут плана по дням" : "Сначала пройдите квиз"}">
+          🗓 Мой план
+        </button>
+      </div>
+      <div class="map-wrap">
+        <svg id="crimea-map" viewBox="0 0 1000 380" role="img" aria-label="Схема Крыма с точками"></svg>
+      </div>
+      <div class="map-legend" id="map-legend"></div>
+    </div>`;
+  $$("#map-tags .chip-btn").forEach(b => b.addEventListener("click", () => {
+    state.f.tag = state.f.tag === b.dataset.tag ? "" : b.dataset.tag;
+    renderMap();
+  }));
+  $("#map-plan").addEventListener("click", () => {
+    state.mapShowPlan = !state.mapShowPlan;
+    drawMap();
+  });
+  drawMap();
+}
+
+function drawMap() {
+  const svg = $("#crimea-map");
+  if (!svg) return;
+  const pts = arr => arr.map(([lng, lat]) =>
+    `${MAP.px(lng).toFixed(1)},${MAP.py(lat).toFixed(1)}`).join(" ");
+  const items = state.attractions.filter(
+    a => !state.f.tag || a.tags.includes(state.f.tag));
+
+  const markers = items.map(a => {
+    const meta = state.meta.types[a.type] || { emoji: "📍" };
+    const color = TYPE_COLORS[a.type] || "#64748b";
+    const fav = state.favs.has(a.id) ? ' class="fav-ring"' : "";
+    return `<g class="marker" data-id="${a.id}"
+        transform="translate(${MAP.px(a.lng).toFixed(1)},${MAP.py(a.lat).toFixed(1)})">
+      <title>${a.name} — ${a.region}</title>
+      <circle${fav} r="14" fill="none" stroke="#e0475b" stroke-width="2" opacity="${state.favs.has(a.id) ? 1 : 0}"/>
+      <circle r="11" fill="${color}" stroke="#fff" stroke-width="2"/>
+      <text y="4.5" text-anchor="middle" font-size="11" pointer-events="none">${meta.emoji}</text>
+    </g>`;
+  }).join("");
+
+  let planLayer = "";
+  if (state.mapShowPlan && state.quizResult) {
+    const stops = state.quizResult.itinerary.days.flatMap(d => d.stops);
+    planLayer = `
+      <polyline points="${stops.map(s =>
+        `${MAP.px(s.lng).toFixed(1)},${MAP.py(s.lat).toFixed(1)}`).join(" ")}"
+        fill="none" stroke="#f5a524" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.9"/>
+      ${stops.map((s, i) => `<g transform="translate(${MAP.px(s.lng).toFixed(1)},${MAP.py(s.lat).toFixed(1)})" pointer-events="none">
+        <circle r="8" fill="#f5a524" stroke="#fff" stroke-width="2"/>
+        <text y="3.5" text-anchor="middle" font-size="9" font-weight="700" fill="#3a2a05">${i + 1}</text>
+      </g>`).join("")}`;
+  }
+
+  svg.innerHTML = `
+    <defs>
+      <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#c3e6ef"/>
+        <stop offset="1" stop-color="#a8d8e8"/>
+      </linearGradient>
+    </defs>
+    <rect x="0" y="0" width="1000" height="380" fill="url(#sea)" rx="18"/>
+    <polygon points="${pts(MAP.coast)}" fill="#f5eddb" stroke="#cbb98e" stroke-width="2.5" stroke-linejoin="round"/>
+    <polygon points="${pts(MAP.sivash)}" fill="#b9dde9" stroke="#8fc3d4" stroke-width="1.5"/>
+    <text class="sea-label" x="430" y="352">Чёрное море</text>
+    <text class="sea-label" x="838" y="26">Азовское море</text>
+    <text class="sea-label" x="176" y="190">Сиваш</text>
+    <text class="sea-label small" x="912" y="98">Керченский пролив</text>
+    ${MAP.cities.map(([n, lng, lat]) =>
+      `<text class="city-label" x="${MAP.px(lng).toFixed(1)}" y="${MAP.py(lat).toFixed(1)}">${n}</text>`).join("")}
+    ${markers}
+    <g id="plan-layer">${planLayer}</g>`;
+
+  // легенда: только типы, представленные в текущей выборке
+  const types = [...new Set(items.map(a => a.type))].sort();
+  $("#map-legend").innerHTML = types.map(t => {
+    const meta = state.meta.types[t] || { emoji: "📍", label: t };
+    return `<span class="legend-item"><i style="background:${TYPE_COLORS[t] || "#64748b"}"></i>${meta.emoji} ${meta.label}</span>`;
+  }).join("") + `<span class="legend-item"><i style="background:transparent;border:2px solid #e0475b;border-radius:50%"></i>❤ избранное</span>`;
+
+  $$(".marker", svg).forEach(g =>
+    g.addEventListener("click", () => openModal(g.dataset.id)));
+}
+
+/* ---------------- router / init ---------------- */
+function route() {
+  const { path, query } = hashParts();
+  $$(".nav a").forEach(a => a.classList.toggle("active", a.dataset.nav === path || (path === "home" && a.dataset.nav === "home")));
+  if (path === "catalog") renderCatalog();
+  else if (path === "map") renderMap();
+  else if (path === "quiz") {
+    if (!state.quizResult && !state.planAutoDone) {
+      const parsed = parsePlanParam(query.get("plan"));
+      if (parsed) {
+        state.planAutoDone = true;
+        return autoEvaluatePlan(parsed);
+      }
+    }
+    renderQuiz();
+  }
+  else if (path === "news") renderNews();
+  else renderHome();
+  window.scrollTo({ top: 0 });
+}
+
+window.addEventListener("hashchange", route);
+window.addEventListener("keydown", e => { if (e.key === "Escape") $("#modal-root").innerHTML = ""; });
+
+(async function init() {
+  loadFavs();
+  try {
+    const [meta, areas, attr, quiz] = await Promise.all([
+      api("/api/tags"), api("/api/areas"), api("/api/attractions"), api("/api/quiz"),
+    ]);
+    state.meta = meta;
+    state.areas = areas.areas;
+    state.attractions = attr.items;
+    state.quiz = quiz;
+  } catch (e) {
+    view.innerHTML = `<div class="empty"><div class="big">⚠️</div>Не удалось загрузить данные приложения: ${e.message}</div>`;
+    return;
+  }
+  try { await loadNews(); } catch (e) { /* badge останется в дефолте */ }
+  api("/api/weather").then(d => { state.weather = d; route(); }).catch(() => {});
+  api("/api/health").then(d => {
+    const el = document.getElementById("app-version");
+    if (el && d.version) el.textContent = "v" + d.version;
+  }).catch(() => {});
+  route();
+  setInterval(() => { if (!document.hidden && state.news) loadNews().catch(() => {}); }, 10 * 60 * 1000);
+})();

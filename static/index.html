@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Крым.Гид — что посетить в Крыму</title>
+  <meta name="description" content="Личный гид по Крыму: квиз подберёт места под ваши интересы, каталог — 36 точек, а лента — свежие новости с полуострова." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌊</text></svg>" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="#/"><span class="brand-wave">🌊</span> Крым.<b>Гид</b></a>
+      <nav class="nav">
+        <a href="#/" data-nav="home">Главная</a>
+        <a href="#/catalog" data-nav="catalog">Каталог</a>
+        <a href="#/map" data-nav="map">Карта</a>
+        <a href="#/quiz" data-nav="quiz">Квиз</a>
+        <a href="#/news" data-nav="news">Новости</a>
+      </nav>
+      <span id="net-badge" class="badge badge-muted" title="Статус опроса источников">…</span>
+    </div>
+  </header>
+
+  <main id="view" class="wrap" aria-live="polite"></main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <span>🌊 Крым.Гид — туристический помощник: квиз, каталог и живая лента новостей полуострова.</span>
+      <span class="muted">Новости: публичные RSS-ленты (ТАСС, РБК, News.ru, КРИМ-ИНФОРМ, Крым.Цифровой). Погода: Open-Meteo. <span id="app-version"></span></span>
+    </div>
+  </footer>
+
+  <div id="modal-root"></div>
+  <div id="toast-root"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

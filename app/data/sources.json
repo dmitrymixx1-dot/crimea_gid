@@ -1,0 +1,58 @@
+[
+  {
+    "id": "tass",
+    "name": "ТАСС",
+    "url": "https://tass.ru/rss/v2.xml",
+    "type": "rss",
+    "description": "Федеральное новостное агентство"
+  },
+  {
+    "id": "rbc",
+    "name": "РБК",
+    "url": "https://rssexport.rbc.ru/rbcnews/news/30/full.rss",
+    "type": "rss",
+    "description": "Новости экономики и общества"
+  },
+  {
+    "id": "newsru",
+    "name": "News.ru",
+    "url": "https://news.ru/rss",
+    "type": "rss",
+    "description": "Общие новости дня"
+  },
+  {
+    "id": "kriminform",
+    "name": "КРИМ-ИНФОРМ",
+    "url": "https://www.kriminform.ru/rss/allnews.xml",
+    "type": "rss",
+    "description": "Крупнейшее крымское новостное агентство"
+  },
+  {
+    "id": "crimedigital",
+    "name": "Крым.Цифровой",
+    "url": "https://crimedigital.ru/rss/all-news.xml",
+    "type": "rss",
+    "description": "Крымский региональный портал"
+  },
+  {
+    "id": "tg-kriminform",
+    "name": "КРИМ-ИНФОРМ · TG",
+    "url": "https://t.me/s/kriminform",
+    "type": "telegram",
+    "description": "Публичное превью телеграм-канала (парсится без ключа)"
+  },
+  {
+    "id": "tg-rbc",
+    "name": "РБК · TG",
+    "url": "https://t.me/s/rbc",
+    "type": "telegram",
+    "description": "Публичное превью телеграм-канала РБК"
+  },
+  {
+    "id": "tg-newsru",
+    "name": "News.ru · TG",
+    "url": "https://t.me/s/newsru",
+    "type": "telegram",
+    "description": "Публичное превью телеграм-канала News.ru"
+  }
+]
