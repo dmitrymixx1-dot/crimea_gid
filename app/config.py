@@ -32,4 +32,4 @@ USER_AGENT = (
     "(tourism news aggregator for Crimea; FastAPI + feedparser)"
 )
 
-APP_VERSION = "0.9.0-beta"
+APP_VERSION = "0.9.1-beta"
