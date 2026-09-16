@@ -137,7 +137,7 @@ def test_catalog_size_and_area_coverage():
 # Координаты сверены с OpenStreetMap/Википедией: якоря не дают «уплыть»
 # точкам обратно в приблизительные значения.
 ANCHORS = {
-    "lastochino": (44.4344, 34.1144),
+    "lastochino": (44.4306, 34.1286),
     "vorontsov": (44.4198, 34.0558),
     "hersonesus": (44.6117, 33.4933),
     "sudak": (44.8506, 34.9761),
