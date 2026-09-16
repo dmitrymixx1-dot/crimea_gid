@@ -8,7 +8,18 @@
 ```
 X-Content-Type-Options: nosniff
 Referrer-Policy: strict-origin-when-cross-origin
+Content-Security-Policy: default-src 'self'; script-src 'self';
+  style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';
+  font-src 'self' data:; object-src 'none'; base-uri 'self';
+  form-action 'self'; frame-ancestors 'self'
 ```
+
+CSP допускает inline только для стилей (style-атрибуты шаблонов):
+весь JavaScript приложения — внешние файлы (`script-src 'self'`),
+inline-обработчики вида `onerror=` во фронтенде запрещены и закрыты
+тестом `test_assets.py::test_no_inline_event_handlers_in_frontend`.
+`frame-ancestors` ослабляется переменной `CSP_FRAME_ANCESTORS`
+(например, `*` для встраивания в iframe-превью).
 
 ## Оглавление
 
@@ -34,7 +45,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 **Ответ 200:**
 
 ```json
-{"ok": true, "name": "Крым.Гид", "version": "0.11.0"}
+{"ok": true, "name": "Крым.Гид", "version": "0.12.0"}
 ```
 
 | Поле | Тип | Описание |
@@ -367,9 +378,15 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 | Метод | Путь | Описание |
 |---|---|---|
-| GET | `/` | SPA (`index.html`) |
+| GET | `/` | SPA-каркас: `index.html` с подставленным origin в Open Graph |
 | GET | `/static/*` | статика (JS/CSS/изображения, манифест PWA) |
 | GET | `/sw.js` | service worker из корня (scope `/`), `Cache-Control: no-cache` |
+
+`GET /` отдаёт каркас с мета-тегами Open Graph / Twitter Card: плейсхолдер
+`__ORIGIN__` заменяется фактическим origin запроса (с учётом
+`X-Forwarded-Proto`/`X-Forwarded-Host`) или значением `SITE_ORIGIN` из env —
+`og:url` и `og:image` обязаны быть абсолютными. Ответ — `text/html`,
+заголовки безопасности те же.
 
 ---
 

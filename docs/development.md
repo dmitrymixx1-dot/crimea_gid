@@ -23,18 +23,19 @@ python3 -m venv .venv
 .venv/bin/python -m pytest tests/ -q        # весь свит
 .venv/bin/python -m pytest tests/test_news.py -q   # один модуль
 .venv/bin/python -m pytest tests/ -k weather -q    # по имени
-node --test "tests/js/*.test.js"            # JS-тесты шаринга плана
+node --test "tests/js/*.test.js"            # JS-тесты шаринга плана и каталога
 node --check static/app.js && node --check static/plan-link.js \
-  && node --check static/sw.js
+  && node --check static/catalog-link.js && node --check static/sw.js
 .venv/bin/ruff check app tests              # линтер
 ```
 
-**142 Python-теста**, сеть не используется (все внешние вызовы заглушены),
-плюс **6 JS-тестов** (`tests/js/plan-link.test.js`, `node:test` без зависимостей):
+**161 Python-тест**, сеть не используется (все внешние вызовы заглушены),
+плюс **14 JS-тестов** (`tests/js/`, `node:test` без зависимостей):
 
 | Модуль | Что покрывает |
 |---|---|
-| `test_api.py` | эндпоинты, фильтры (в т.ч. `tag=extreme`, `area=Западный`), заголовки безопасности, PWA-маршруты, контракт 422 (квиз) / 404 (погода) |
+| `test_api.py` | эндпоинты, фильтры (в т.ч. `tag=extreme`, `area=Западный`), заголовки безопасности и CSP, рендер Open Graph (origin из env/`X-Forwarded-*`), a11y-каркас, PWA-маршруты, контракт 422 (квиз) / 404 (погода) |
+| `test_assets.py` | аудит статики: бюджет веса и размеры картинок, отсутствие inline-обработчиков и пустых `alt`, внешние `<script>`, согласованность SW/манифеста |
 | `test_data.py` | схемы данных, границы координат, **якорные координаты** (`ANCHORS` — сверено с OSM), объём каталога и покрытие районов, согласованность каталога/квиза со словарями кода и `QuizIn`, источники, файлы картинок типов |
 | `test_load.py` | загрузчик JSON: схемы, кэширование, ошибка на отсутствующий файл |
 | `test_config.py` | формат версии, **согласованность версий** (код/README/SW/доки), дефолты, переопределение через env, пути |
@@ -42,6 +43,7 @@ node --check static/app.js && node --check static/plan-link.js \
 | `test_news.py` | скоринг «Крым», темы, дедупликация, TTL и файл-кэш, офлайн-fallback, форма payload |
 | `test_telegram.py` | парсер `t.me/s/`, сквозной поток telegram-источника |
 | `test_weather.py` | WMO-коды, разбор ответа Open-Meteo, день недели, кэш, фильтр по городу, падение сети, `CITIES` (18 курортов, границы, совпадение с каталогом) |
+| `tests/js/catalog-link.test.js` | фильтры каталога ↔ URL: дефолты не пишутся, round-trip кириллицы/спецсимволов, откат мусорной сортировки |
 
 Соглашения:
 
@@ -53,8 +55,11 @@ node --check static/app.js && node --check static/plan-link.js \
 - Новый эндпоинт — плюс тест в `test_api.py`; новое правило данных —
   плюс тест в `test_data.py`.
 - Чистые JS-функции, от которых зависит шаринг/роутинг, — в отдельные
-  файлы вида `static/plan-link.js` (UMD: `window` + `module.exports`)
-  с тестами в `tests/js/`.
+  файлы вида `static/plan-link.js` и `static/catalog-link.js`
+  (UMD: `window` + `module.exports`) с тестами в `tests/js/`.
+- Inline-обработчики (`onerror=` и т.п.) во фронтенде запрещены CSP —
+  аварии картинок обрабатывает делегированный listener по
+  `data-img-fallback` (`remove` / `hide` / `soft`).
 
 ## CI
 
@@ -62,7 +67,7 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 и на PR:
 
 1. **test** — install deps → `ruff check app tests` →
-   `node --check` (`app.js`, `plan-link.js`, `sw.js`) →
+   `node --check` (`app.js`, `plan-link.js`, `catalog-link.js`, `sw.js`) →
    `node --test "tests/js/*.test.js"` → `pytest -q`;
 2. **docker** — сборка образа (после успешных тестов).
 
@@ -88,6 +93,7 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 | Новый город погоды | кортеж в `CITIES` (`app/services/weather.py`) | `test_weather.py` |
 | Новый тег | `TAGS` + `TAG_EMOJI` в `recommend.py`, вариант в `quiz.json`, при желании — профиль в `PROFILES` и правило в `purpose_topics` | `test_data.py`, `test_recommends.py` |
 | Новый тип места | `TYPE_META` в `recommend.py` + картинка в `static/img/` + цвет в `TYPE_COLORS` (`app.js`) | `test_data.py::test_type_meta_images_exist` |
+| Оптимизировать картинки | `pip install pillow && python tools/optimize_images.py` (бюджеты веса — в `test_assets.py` и в самом скрипте) | `test_assets.py::test_image_weight_budget` |
 | Новая тема новостей | правило в `TOPIC_RULES` (`news.py`, порядок = приоритет) + подпись в `TOPIC_LABELS` (`app.js`) | `test_news.py::test_topics_*` |
 | Новый вопрос квиза | `quiz.json` + учёт ответа в `evaluate()`/`_score_attraction()` + поле в `QuizIn` (`main.py`) + сериализация ссылки плана (`buildPlanLink`/`parsePlanParam` в `app.js`) | `test_data.py`, `test_api.py` |
 | Новый эндпоинт | маршрут в `main.py`; документация — [api.md](api.md) | `test_api.py` |

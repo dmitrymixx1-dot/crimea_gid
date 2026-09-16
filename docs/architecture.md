@@ -24,9 +24,11 @@ app/
     └── weather.py        # Open-Meteo → нормализация → часовой кэш
 
 static/
-├── index.html            # каркас (шапка, <main id="view">, футер)
+├── index.html            # каркас (шапка, <main id="view">, футер, OG-теги)
 ├── app.js                # SPA: роутер, состояние, рендер-функции, PWA
-├── style.css             # стили + @media print
+├── plan-link.js          # UMD: сериализация плана в ссылку (тестируется)
+├── catalog-link.js       # UMD: фильтры каталога ↔ URL (тестируется)
+├── style.css             # стили + @media print + a11y (skip-link, sr-only)
 ├── sw.js                 # service worker (офлайн-оболочка)
 └── manifest.webmanifest  # PWA-манифест
 ```
@@ -138,8 +140,19 @@ Open-Meteo: current (temp/code/wind) + daily ×4 (code/max/min)
 ## Фронтенд
 
 - **Роутинг**: hash (`#/`, `#/catalog`, `#/map`, `#/quiz`, `#/news`,
-  `#/place/<id>`). Параметры: `?tag=`, `?plan=` (восстановление
-  результата квиза по ссылке).
+  `#/place/<id>`). Параметры: `?plan=` (восстановление результата квиза
+  по ссылке) и `?tag=&area=&q=&sort=` у каталога.
+- **Фильтры каталога в URL**: при входе по ссылке фильтры читаются из
+  адреса (`CatalogLink.parseCatalogQuery`), дальше состояние живёт в
+  `state.f` и зеркалится в адрес через `history.replaceState` (без спама
+  в истории). Кнопка «🔗 Ссылка на подборку» копирует абсолютный URL.
+- **Доступность**: skip-link (preventDefault + `focus()` на `<main
+  tabindex="-1">`, hash не меняется и роутер не сбивается), focus trap
+  в модалке (`role="dialog" aria-modal`, Tab/Shift+Tab цикличны, фокус
+  возвращается на инициатора), `aria-live` у тостов и анонс маршрута
+  в `#route-status`, осмысленные `alt` категорийных картинок, карточки/
+  остановки плана/точки карты открываются с клавиатуры (ссылки
+  `#/place/<id>` и Enter/Space на маркерах SVG).
 - **Состояние**: единый объект `state` в `app.js` (каталог, мета, новости,
   фильтры, прогресс квиза, результат, избранное, погода, флаг маршрута).
 - **Избранное**: `localStorage["crimea_favs"]`, рендерится сердечками,
@@ -156,13 +169,23 @@ Open-Meteo: current (temp/code/wind) + daily ×4 (code/max/min)
   обновлением, **API** — network-first с откатом в кэш.
 - Имя кэша версионируется (`crimea-gid-vX.Y.Z`) — при обновлении
   приложения старые кэши зачищаются в `activate`.
+- Precache хранит отрендеренный ответ `GET /` (с абсолютными OG-тегами),
+  а не сырой `index.html` с плейсхолдером `__ORIGIN__`.
 
 ## Безопасность
 
-- Middleware: `X-Content-Type-Options: nosniff`, `Referrer-Policy`.
-- Внешний контент проходит очистку: `_clean_text` срезает HTML-теги
-  и HTML-сущности новостей перед отдачей.
+- Middleware: `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
+  `Content-Security-Policy` (`default-src 'self'`, `script-src 'self'`,
+  `object-src 'none'`, `frame-ancestors 'self'` по умолчанию). Inline
+  допустим только в style-атрибутах (`style-src 'unsafe-inline'`), поэтому
+  аварийные обработчики картинок — один делегированный listener на
+  `data-img-fallback`, а не `onerror=` в разметке.
+- Фронтенд экранирует значения из данных и новостей при сборке шаблонов
+  (`esc()`); внешний контент дополнительно проходит очистку: `_clean_text`
+  срезает HTML-теги и HTML-сущности новостей перед отдачей.
 - Ссылки на внешние источники — `target="_blank" rel="noopener"`.
+- Open Graph: `og:url`/`og:image` абсолютные — origin берётся из
+  `SITE_ORIGIN` (env) или из запроса с учётом `X-Forwarded-Proto/Host`.
 - Секретов в репозитории нет (API-ключи не нужны принципиально).
 
 ## Точки расширения

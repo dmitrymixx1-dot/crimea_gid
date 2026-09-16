@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Крым.Гид — что посетить в Крыму</title>
   <meta name="description" content="Личный гид по Крыму: квиз подберёт места под ваши интересы, каталог — 52 точки, а лента — свежие новости с полуострова." />
+  <!-- Open Graph / Twitter Card: __ORIGIN__ подставляется сервером в GET / -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Крым.Гид" />
+  <meta property="og:locale" content="ru_RU" />
+  <meta property="og:title" content="Крым.Гид — что посетить в Крыму" />
+  <meta property="og:description" content="Квиз подберёт места под ваши интересы и разложит их по дням, каталог — 52 проверенные точки, схема-карта, новости и погода полуострова." />
+  <meta property="og:url" content="__ORIGIN__/" />
+  <meta property="og:image" content="__ORIGIN__/static/img/hero.jpg" />
+  <meta property="og:image:alt" content="Южный берег Крыма на закате" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Крым.Гид — что посетить в Крыму" />
+  <meta name="twitter:description" content="Квиз подберёт места под ваши интересы и разложит их по дням, каталог — 52 проверенные точки, схема-карта, новости и погода полуострова." />
+  <meta name="twitter:image" content="__ORIGIN__/static/img/hero.jpg" />
   <link rel="icon" href="/static/img/icon-192.png" type="image/png" />
   <link rel="apple-touch-icon" href="/static/img/icon-180.png" />
   <link rel="manifest" href="/static/manifest.webmanifest" />
@@ -15,10 +28,11 @@
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
+  <a class="skip-link" id="skip-link" href="#view">Перейти к содержимому</a>
   <header class="site-header">
     <div class="wrap header-inner">
       <a class="brand" href="#/"><span class="brand-wave">🌊</span> Крым.<b>Гид</b></a>
-      <nav class="nav">
+      <nav class="nav" aria-label="Основные разделы">
         <a href="#/" data-nav="home">Главная</a>
         <a href="#/catalog" data-nav="catalog">Каталог</a>
         <a href="#/map" data-nav="map">Карта</a>
@@ -30,7 +44,8 @@
     </div>
   </header>
 
-  <main id="view" class="wrap" aria-live="polite"></main>
+  <main id="view" class="wrap" tabindex="-1"></main>
+  <p id="route-status" class="sr-only" role="status"></p>
 
   <footer class="site-footer">
     <div class="wrap footer-inner">
@@ -40,9 +55,10 @@
   </footer>
 
   <div id="modal-root"></div>
-  <div id="toast-root"></div>
+  <div id="toast-root" role="status" aria-live="polite"></div>
 
   <script src="/static/plan-link.js"></script>
+  <script src="/static/catalog-link.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
