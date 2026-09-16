@@ -1,10 +1,10 @@
-from app.services.recommend import (PROFILES, TAGS, _score_attraction,
-                                    evaluate, plan_itinerary)
+from app.services.recommend import PROFILES, _score_attraction, evaluate, plan_itinerary
 
 
 def _ans(**kw):
-    base = dict(purpose=["beach"], season="any", tempo="medium", budget="comfort",
-                party="solo", duration="3-5", transport="car")
+    base = {"purpose": ["beach"], "season": "any", "tempo": "medium",
+            "budget": "comfort", "party": "solo", "duration": "3-5",
+            "transport": "car"}
     base.update(kw)
     return base
 
@@ -23,9 +23,12 @@ def test_no_car_excludes_car_only_places():
 
 
 def test_profiles_by_main_purpose():
-    assert evaluate(_ans(purpose=["wine"]), [])["profile"]["title"] == "Винная карта Крыма"
-    assert evaluate(_ans(purpose=["beach"]), [])["profile"]["title"] == "Море, солнце и спокойствие"
-    assert evaluate(_ans(purpose=["history"]), [])["profile"]["title"] == "Исследователь прошлого"
+    def title(purpose):
+        return evaluate(_ans(purpose=[purpose]), [])["profile"]["title"]
+
+    assert title("wine") == "Винная карта Крыма"
+    assert title("beach") == "Море, солнце и спокойствие"
+    assert title("history") == "Исследователь прошлого"
 
 
 def test_empty_purpose_falls_back_to_beach():
@@ -50,7 +53,8 @@ def test_recommendations_have_reasons_when_matched():
 # ---------------- itinerary ----------------
 
 def test_itinerary_single_rec_one_day():
-    rec = [{"area": "Южный берег", "duration_h": 2, "tags": ["beach"], "id": "a", "name": "X"}]
+    rec = [{"area": "Южный берег", "duration_h": 2, "tags": ["beach"],
+            "id": "a", "name": "X"}]
     r = plan_itinerary(rec, "1-2")
     assert len(r["days"]) == 1
     assert r["days"][0]["stops"][0]["slot"] in ("morning", "evening")
@@ -58,8 +62,8 @@ def test_itinerary_single_rec_one_day():
 
 
 def test_itinerary_full_day_places_are_alone():
-    rec = [{"area": "Центральный", "duration_h": 7, "tags": ["active"], "id": f"a{i}", "name": f"A{i}"}
-           for i in range(4)]
+    rec = [{"area": "Центральный", "duration_h": 7, "tags": ["active"],
+            "id": f"a{i}", "name": f"A{i}"} for i in range(4)]
     r = plan_itinerary(rec, "3-5")
     assert len(r["days"]) == 4
     for d in r["days"]:
@@ -172,9 +176,9 @@ def test_family_party_boosts_family_reason():
 def test_recommendation_shape_complete():
     r = evaluate(_ans(), [])
     for x in r["recommendations"]:
-        assert set(("id", "name", "type", "region", "area", "tags", "season",
-                    "budget", "duration_h", "rating", "lat", "lng",
-                    "type_meta", "score", "reasons")) <= set(x)
+        assert {"id", "name", "type", "region", "area", "tags", "season",
+                "budget", "duration_h", "rating", "lat", "lng",
+                "type_meta", "score", "reasons"} <= set(x)
         assert x["type_meta"]["emoji"]
         assert isinstance(x["score"], float)
 
@@ -234,10 +238,12 @@ def test_itinerary_evening_slot_for_short_last_stop():
 
 def test_itinerary_area_clustering():
     """День не смешивает районы: каждый день — один район."""
-    recs = (
-        [{"area": "Южный берег", "duration_h": 2, "tags": [], "id": f"s{i}", "name": f"S{i}"} for i in range(4)] +
-        [{"area": "Западный", "duration_h": 2, "tags": [], "id": f"w{i}", "name": f"W{i}"} for i in range(4)]
-    )
+    def _rec(area, prefix, i):
+        return {"area": area, "duration_h": 2, "tags": [],
+                "id": f"{prefix}{i}", "name": f"{prefix}{i}"}
+
+    recs = ([_rec("Южный берег", "s", i) for i in range(4)] +
+            [_rec("Западный", "w", i) for i in range(4)])
     r = plan_itinerary(recs, "1-2")
     assert r["days"]
     for d in r["days"]:

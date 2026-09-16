@@ -2,8 +2,7 @@
 import pytest
 
 from app.services import load
-from app.services.load import (get_attractions, get_quiz, get_snapshot,
-                               get_sources)
+from app.services.load import get_attractions, get_quiz, get_snapshot, get_sources
 
 
 def test_attractions_nonempty_list_of_dicts():

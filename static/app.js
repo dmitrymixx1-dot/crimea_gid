@@ -412,17 +412,8 @@ function dayCard(day) {
 }
 
 function buildPlanLink() {
-  const a = state.quizResult.answers;
-  const s = [a.purpose.join(","), a.season, a.tempo, a.budget, a.party, a.duration, a.transport].join("~");
+  const s = PlanLink.buildPlanString(state.quizResult.answers);
   return location.origin + location.pathname + "#/quiz?plan=" + encodeURIComponent(s);
-}
-
-function parsePlanParam(str) {
-  const p = (str || "").split("~");
-  if (p.length !== 7) return null;
-  const purpose = p[0].split(",").filter(Boolean);
-  if (!purpose.length) return null;
-  return { purpose, season: p[1], tempo: p[2], budget: p[3], party: p[4], duration: p[5], transport: p[6] };
 }
 
 async function autoEvaluatePlan(plan) {
@@ -870,7 +861,7 @@ function route() {
   else if (path === "map") renderMap();
   else if (path === "quiz") {
     if (!state.quizResult && !state.planAutoDone) {
-      const parsed = parsePlanParam(query.get("plan"));
+      const parsed = PlanLink.parsePlanParam(query.get("plan"));
       if (parsed) {
         state.planAutoDone = true;
         return autoEvaluatePlan(parsed);

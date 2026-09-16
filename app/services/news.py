@@ -11,7 +11,7 @@ import html
 import json
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import feedparser
 import httpx
@@ -167,7 +167,8 @@ class NewsService:
                     "failed": data.get("failed", []),
                     "items": data.get("items", []),
                 }
-        except Exception:
+        # Битый/отсутствующий файловый кэш — не ошибка: просто идём в сеть.
+        except Exception:  # noqa: BLE001, S110
             pass
 
     def _save_file_cache(self) -> None:
@@ -182,7 +183,8 @@ class NewsService:
                 }, ensure_ascii=False),
                 encoding="utf-8",
             )
-        except Exception:
+        # Не смогли сохранить кэш (ro-диск и т.п.) — лента всё равно отдаётся.
+        except Exception:  # noqa: BLE001, S110
             pass
 
     # ------------------------------------------------------------------ fetch
@@ -210,7 +212,7 @@ class NewsService:
             published = ""
             if entry.get("published_parsed"):
                 published = datetime.fromtimestamp(
-                    calendar.timegm(entry["published_parsed"]), tz=timezone.utc
+                    calendar.timegm(entry["published_parsed"]), tz=UTC
                 ).astimezone().isoformat()
             elif entry.get("published"):
                 published = entry["published"]
@@ -280,7 +282,8 @@ class NewsService:
                     *(self._fetch_feed(client, s) for s in self._sources),
                     return_exceptions=True,
                 )
-            for src, res in zip(self._sources, results):
+            # gather возвращает ровно по результату на источник — strict фиксирует это.
+            for src, res in zip(self._sources, results, strict=True):
                 if isinstance(res, Exception):
                     failed.append(src["name"])
                 else:
@@ -290,7 +293,8 @@ class NewsService:
                         it["source"] = src["name"]
                         it["source_id"] = src["id"]
                     all_items.extend(res)
-        except Exception:
+        # Любой сбой опроса (сеть, DNS, SSL) — штатный офлайн-режим со снапшотом.
+        except Exception:  # noqa: BLE001
             online = False
             failed = [s["name"] for s in self._sources]
 
@@ -312,7 +316,7 @@ class NewsService:
         items = self._cache["items"]
         return {
             "online": self._cache["online"],
-            "updated_at": datetime.now(timezone.utc).astimezone().isoformat(),
+            "updated_at": datetime.now(UTC).astimezone().isoformat(),
             "sources": [{"id": s["id"], "name": s["name"]} for s in self._sources],
             "failed_sources": self._cache["failed"],
             "total": len(items),

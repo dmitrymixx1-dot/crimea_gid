@@ -181,7 +181,8 @@ def _score_attraction(a: dict, ans: dict) -> tuple[float, list[str]]:
             score -= 1.0
 
     # 3) Бюджет.
-    budget = {"economy": 1, "comfort": 2, "premium": 3}.get(ans.get("budget", "comfort"), 2)
+    budget_levels = {"economy": 1, "comfort": 2, "premium": 3}
+    budget = budget_levels.get(ans.get("budget", "comfort"), 2)
     if a.get("budget", 2) <= budget:
         score += 1.0
     else:
@@ -193,7 +194,8 @@ def _score_attraction(a: dict, ans: dict) -> tuple[float, list[str]]:
     if party == "family" and "family" in a["tags"]:
         score += 1.5
         reasons.append("Отличный вариант с детьми")
-    if party == "couple" and ("romance" in a["tags"] or "photo" in a["tags"] or "view" in a["tags"]):
+    couple_tags = {"romance", "photo", "view"}
+    if party == "couple" and couple_tags & set(a["tags"]):
         score += 1.0
     if party == "friends" and (
         "active" in a["tags"] or "food" in a["tags"] or "extreme" in a["tags"]
@@ -224,7 +226,8 @@ def _score_attraction(a: dict, ans: dict) -> tuple[float, list[str]]:
 def evaluate(answers: dict, news_items: list[dict] | None = None) -> dict:
     """Ответы квиза → профиль, список рекомендаций, новости по интересам."""
     answers = {
-        "purpose": [t for t in answers.get("purpose", []) if t in TAGS][:3] or ["beach"],
+        "purpose": [t for t in answers.get("purpose", []) if t in TAGS][:3]
+        or ["beach"],
         "season": answers.get("season", "any"),
         "tempo": answers.get("tempo", "medium"),
         "budget": answers.get("budget", "comfort"),
@@ -237,7 +240,8 @@ def evaluate(answers: dict, news_items: list[dict] | None = None) -> dict:
     for a in get_attractions():
         score, reasons = _score_attraction(a, answers)
         if score >= 2.5:
-            meta = TYPE_META.get(a["type"], {"emoji": "📍", "label": a["type"], "img": "cat_nature.jpg"})
+            fallback = {"emoji": "📍", "label": a["type"], "img": "cat_nature.jpg"}
+            meta = TYPE_META.get(a["type"], fallback)
             scored.append((score, {**a, "type_meta": meta, "score": round(score, 1),
                                     "reasons": reasons}))
     scored.sort(key=lambda x: x[0], reverse=True)

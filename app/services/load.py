@@ -1,12 +1,12 @@
 """Загрузка JSON-данных из app/data с простым кэшированием."""
 import json
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 
-@lru_cache(maxsize=None)
+@cache
 def _read(name: str):
     return json.loads((DATA_DIR / name).read_text(encoding="utf-8"))
 

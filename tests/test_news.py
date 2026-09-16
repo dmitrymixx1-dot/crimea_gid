@@ -99,7 +99,7 @@ def test_cache_ttl_prevents_refetch(monkeypatch, tmp_path):
     second = _get(svc, force=False)
     assert calls["n"] == n1  # второй раз — из памяти, без запросов
     assert first["items"] == second["items"]
-    third = _get(svc, force=True)
+    _get(svc, force=True)
     assert calls["n"] == 2 * n1  # force — перечитали
 
 
