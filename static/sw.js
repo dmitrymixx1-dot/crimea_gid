@@ -1,6 +1,6 @@
 /* Крым.Гид — service worker: офлайн-оболочка приложения.
    Статика — cache-first, API — network-first с откатом в кэш. */
-const CACHE = "crimea-gid-v0.9.2";
+const CACHE = "crimea-gid-v0.10.0";
 const SHELL = [
   "/",
   "/static/index.html",

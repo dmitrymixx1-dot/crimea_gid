@@ -8,14 +8,16 @@ from .load import get_attractions
 TAGS = {
     "beach": "пляжи", "nature": "природа", "history": "история",
     "culture": "дворцы и музеи", "food": "гастрономия", "wine": "вино",
-    "active": "активный отдых", "family": "с детьми", "photo": "фотогении",
+    "active": "активный отдых", "extreme": "экстрим и дайвинг",
+    "family": "с детьми", "photo": "фотогении",
     "spa": "спа и грязели", "city": "набережные и города", "view": "панорамы",
     "free": "бесплатно", "romance": "для двоих",
 }
 
 TAG_EMOJI = {
     "beach": "🏖️", "nature": "🌿", "history": "🏛️", "culture": "🖼️",
-    "food": "🍽️", "wine": "🍷", "active": "🥾", "family": "👨‍‍👧",
+    "food": "🍽️", "wine": "🍷", "active": "🥾", "extreme": "🤿",
+    "family": "👨‍‍👧",
     "photo": "📸", "spa": "🧖", "city": "🏙️", "view": "🌄",
     "free": "🆓", "romance": "💞",
 }
@@ -77,6 +79,13 @@ PROFILES = {
         "emoji": "📸",
         "summary": "Ваш приоритет — кадры: закатные точки, утёсы, "
                    "цветы и архитектурные декорации.",
+    },
+    "extreme": {
+        "title": "Крым на адреналине",
+        "emoji": "🤿",
+        "summary": "Вам нужны ветер и глубина: дайвинг на Тарханкуте, кайт "
+                   "на Азовском, полёты над Коктебелем и грунтовки к диким "
+                   "бухтам.",
     },
 }
 
@@ -186,7 +195,9 @@ def _score_attraction(a: dict, ans: dict) -> tuple[float, list[str]]:
         reasons.append("Отличный вариант с детьми")
     if party == "couple" and ("romance" in a["tags"] or "photo" in a["tags"] or "view" in a["tags"]):
         score += 1.0
-    if party == "friends" and ("active" in a["tags"] or "food" in a["tags"]):
+    if party == "friends" and (
+        "active" in a["tags"] or "food" in a["tags"] or "extreme" in a["tags"]
+    ):
         score += 1.0
 
     # 5) Темп.
@@ -242,7 +253,8 @@ def evaluate(answers: dict, news_items: list[dict] | None = None) -> dict:
                       "history": {"history", "events"}, "food": {"food", "events"},
                       "wine": {"food", "events"}, "active": {"events", "transport"},
                       "family": {"events", "beach"}, "photo": {"events", "weather"},
-                      "spa": {"safety", "beach"}, "city": {"transport", "events"}}
+                      "spa": {"safety", "beach"}, "city": {"transport", "events"},
+                      "extreme": {"weather", "safety"}}
     want = set()
     for t in answers["purpose"]:
         want |= purpose_topics.get(t, set())

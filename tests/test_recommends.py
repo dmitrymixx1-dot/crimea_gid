@@ -11,9 +11,9 @@ def _ans(**kw):
 
 def test_purpose_match_ranks_wine_winery_high():
     r = evaluate(_ans(purpose=["wine"]), [])
-    names = [x["name"] for x in r["recommendations"][:3]]
-    assert any("Винзавод" in n or "погреб" in n.lower() for n in names) or \
-        any("вин" in x["tags"] for x in r["recommendations"][:3])
+    top3 = r["recommendations"][:3]
+    assert top3
+    assert any(x["type"] == "winery" or "wine" in x["tags"] for x in top3)
 
 
 def test_no_car_excludes_car_only_places():

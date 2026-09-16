@@ -156,3 +156,54 @@ def test_index_links_manifest(client):
     r = client.get("/")
     assert "manifest.webmanifest" in r.text
     assert "theme-color" in r.text
+
+
+# ---------------- расширенный каталог (0.10.0) ----------------
+
+def test_catalog_grew_to_fifty(client):
+    body = client.get("/api/attractions").json()
+    assert body["count"] >= 50
+
+
+def test_extreme_tag_filter(client):
+    body = client.get("/api/attractions?tag=extreme").json()
+    assert body["count"] >= 3
+    assert all("extreme" in a["tags"] for a in body["items"])
+    assert "extreme" in client.get("/api/tags").json()["tags"]
+
+
+def test_western_area_filter(client):
+    body = client.get("/api/attractions?area="
+                      + urllib.parse.quote("Западный")).json()
+    assert body["count"] >= 5
+    ids = {a["id"] for a in body["items"]}
+    assert {"tarkhankut", "olenivka", "atlesh"} <= ids
+
+
+def test_single_attraction_has_real_coordinates(client):
+    body = client.get("/api/attractions/tarkhankut").json()
+    assert body["name"] == "Тарханкутский маяк"
+    assert abs(body["lat"] - 45.3473) < 0.02
+    assert abs(body["lng"] - 32.4936) < 0.02
+
+
+def test_quiz_offers_extreme_interest(client):
+    body = client.get("/api/quiz").json()
+    purpose = next(q for q in body["questions"] if q["id"] == "purpose")
+    assert any(o["id"] == "extreme" for o in purpose["options"])
+
+
+def test_quiz_evaluate_extreme_profile(client):
+    r = client.post("/api/quiz/evaluate", json={
+        "purpose": ["extreme"], "season": "summer", "tempo": "active",
+        "budget": "comfort", "party": "friends", "duration": "3-5",
+        "transport": "car",
+    })
+    assert r.status_code == 200
+    d = r.json()
+    assert d["profile"]["title"] == "Крым на адреналине"
+    assert any("extreme" in x["tags"] for x in d["recommendations"][:3])
+
+
+def test_health_reports_new_version(client):
+    assert client.get("/api/health").json()["version"] == "0.10.0"

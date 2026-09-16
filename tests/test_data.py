@@ -7,8 +7,10 @@ def test_attractions_have_coordinates():
     for a in get_attractions():
         assert isinstance(a.get("lat"), (int, float)), a["id"]
         assert isinstance(a.get("lng"), (int, float)), a["id"]
-        assert 44.0 <= a["lat"] <= 45.6, a["id"]
-        assert 33.0 <= a["lng"] <= 37.0, a["id"]
+        # Реальные границы полуострова: Тарханкут (32.49) — Керчь (36.47),
+        # Форос (44.39) — Черноморское (45.50).
+        assert 44.3 <= a["lat"] <= 45.7, a["id"]
+        assert 32.4 <= a["lng"] <= 36.7, a["id"]
 
 
 def test_attractions_schema():
@@ -119,3 +121,71 @@ def test_type_meta_images_exist():
     from app.config import STATIC_DIR
     for t, meta in TYPE_META.items():
         assert (STATIC_DIR / "img" / meta["img"]).exists(), f"{t}: {meta['img']}"
+
+
+# ---------------- объём каталога и географическая достоверность ----------------
+
+def test_catalog_size_and_area_coverage():
+    """Каталог вырос до 50+ точек, и в каждом районе есть что показать."""
+    items = get_attractions()
+    assert len(items) >= 50, f"в каталоге {len(items)} мест"
+    for area in AREA_LABEL:
+        n = sum(1 for a in items if a["area"] == area)
+        assert n >= 5, f"район «{area}»: всего {n} мест"
+
+
+# Координаты сверены с OpenStreetMap/Википедией: якоря не дают «уплыть»
+# точкам обратно в приблизительные значения.
+ANCHORS = {
+    "lastochino": (44.4306, 34.1286),
+    "vorontsov": (44.4198, 34.0558),
+    "hersonesus": (44.6117, 33.4933),
+    "sudak": (44.8506, 34.9761),
+    "feodosia": (45.0489, 35.3792),
+    "koktebel": (44.9597, 35.2403),
+    "mangup": (44.5931, 33.8014),
+    "tarkhankut": (45.3473, 32.4936),
+    "kazantip": (45.4610, 35.8458),
+    "meganom": (44.7939, 35.0807),
+}
+
+
+def test_anchor_coordinates_are_real():
+    items = {a["id"]: a for a in get_attractions()}
+    for pid, (lat, lng) in ANCHORS.items():
+        a = items[pid]
+        assert abs(a["lat"] - lat) < 0.02, f"{pid}: широта {a['lat']}"
+        assert abs(a["lng"] - lng) < 0.02, f"{pid}: долгота {a['lng']}"
+
+
+def test_western_crimea_reaches_tarkhankut():
+    """Самая западная точка каталога — Тарханкут (≈32.49 в. д.)."""
+    west = min(a["lng"] for a in get_attractions())
+    assert west < 32.6, f"западная граница каталога {west}"
+
+
+# ---------------- новый тег «экстрим и дайвинг» ----------------
+
+def test_extreme_tag_wired_everywhere():
+    from app.services.recommend import PROFILES, TAG_EMOJI
+    quiz = get_quiz()
+    purpose = next(q for q in quiz["questions"] if q["id"] == "purpose")
+    assert "extreme" in TAGS and "extreme" in TAG_EMOJI
+    assert "extreme" in PROFILES
+    assert any(o["id"] == "extreme" for o in purpose["options"])
+    assert sum("extreme" in a["tags"] for a in get_attractions()) >= 3
+
+
+# ---------------- источники новостей ----------------
+
+def test_sources_counts_and_urls():
+    sources = get_sources()
+    rss = [s for s in sources if s["type"] == "rss"]
+    tg = [s for s in sources if s["type"] == "telegram"]
+    assert len(rss) >= 7, f"RSS-лент {len(rss)}"
+    assert len(tg) >= 4, f"телеграм-каналов {len(tg)}"
+    for s in sources:
+        assert s["url"].startswith("https://"), s["id"]
+        assert s["name"] and s["description"], s["id"]
+    for s in tg:
+        assert s["url"].startswith("https://t.me/s/"), s["id"]

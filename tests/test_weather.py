@@ -248,3 +248,36 @@ def test_payload_has_updated_at():
     assert out["online"] is True
     # ISO-строка с таймзоной
     assert "T" in out["updated_at"] and "+" in out["updated_at"]
+
+
+# --------------------------------------------------------------------------
+# Список курортов
+# --------------------------------------------------------------------------
+
+def test_cities_are_unique_and_in_crimea():
+    ids = [c[0] for c in CITIES]
+    assert len(ids) == len(set(ids)), "дубликаты id в CITIES"
+    assert len(CITIES) == 18
+    for cid, name, lat, lon in CITIES:
+        assert name
+        assert 44.3 <= lat <= 45.7, f"{cid}: широта {lat}"
+        assert 32.4 <= lon <= 36.7, f"{cid}: долгота {lon}"
+
+
+def test_cities_cover_all_coasts():
+    """Запад (Черноморское), восток (Щёлкино), центр и юг — все на месте."""
+    got = {c[0] for c in CITIES}
+    assert {"chernomorskoe", "shchelkino", "yalta", "kerch", "evpatoria"} <= got
+
+
+def test_city_coordinates_match_catalog():
+    """Координаты курорта и одноимённой точки каталога не разъезжаются."""
+    from app.services.load import get_attractions
+
+    by_id = {a["id"]: a for a in get_attractions()}
+    for cid, _name, lat, lon in CITIES:
+        a = by_id.get(cid)
+        if not a:
+            continue
+        assert abs(a["lat"] - lat) < 0.02, f"{cid}: широта"
+        assert abs(a["lng"] - lon) < 0.02, f"{cid}: долгота"
