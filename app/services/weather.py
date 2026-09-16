@@ -78,8 +78,9 @@ class WeatherService:
         tmin = daily.get("temperature_2m_min", [])
         for i, day in enumerate(times[:4]):
             try:
-                dt = datetime.fromisoformat(day).astimezone(timezone.utc)
-                dlabel = WEEKDAYS[dt.weekday()]
+                # day — это «YYYY-MM-DD» в локальной зоне города; tz-конвертация
+                # не нужна (и вредна: naive→UTC сдвигает дату назад в UTC+N).
+                dlabel = WEEKDAYS[datetime.fromisoformat(day).weekday()]
             except ValueError:
                 dlabel = day[5:]
             femoji, _ = _code_info(codes[i]) if i < len(codes) else ("🌡️", "")

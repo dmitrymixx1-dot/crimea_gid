@@ -115,3 +115,44 @@ def test_weather_endpoint(client):
 
 def test_unknown_api_route_404(client):
     assert client.get("/api/definitely-not-here").status_code == 404
+
+
+def test_attraction_detail(client):
+    body = client.get("/api/attractions").json()
+    some_id = body["items"][0]["id"]
+    r = client.get(f"/api/attractions/{some_id}")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["id"] == some_id
+    assert d["type_meta"]["emoji"]
+    assert isinstance(d["lat"], (int, float))
+
+
+def test_attraction_detail_404(client):
+    r = client.get("/api/attractions/no-such-place-42")
+    assert r.status_code == 404
+    assert "не найдено" in r.json()["detail"]
+
+
+def test_service_worker_from_root(client):
+    r = client.get("/sw.js")
+    assert r.status_code == 200
+    assert "javascript" in r.headers["content-type"]
+    assert r.headers.get("Service-Worker-Allowed") == "/"
+    assert "crimea-gid" in r.text
+
+
+def test_pwa_manifest_and_icons(client):
+    r = client.get("/static/manifest.webmanifest")
+    assert r.status_code == 200
+    m = r.json()
+    assert m["display"] == "standalone"
+    assert m["theme_color"]
+    for icon in m["icons"]:
+        assert client.get(icon["src"]).status_code == 200
+
+
+def test_index_links_manifest(client):
+    r = client.get("/")
+    assert "manifest.webmanifest" in r.text
+    assert "theme-color" in r.text

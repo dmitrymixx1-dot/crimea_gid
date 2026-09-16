@@ -15,10 +15,10 @@ const state = {
   areas: [],
   quiz: null,
   news: null,
-  f: { q: "", area: "", tag: "" },
+  f: { q: "", area: "", tag: "", sort: "rating" },
   q: { step: 0, answers: {} },
   quizResult: null,
-  newsView: { topic: "all", onlyCrimea: true },
+  newsView: { topic: "all", onlyCrimea: true, q: "" },
   newsLoading: false,
   favs: new Set(),
   planAutoDone: false,
@@ -271,6 +271,12 @@ function renderCatalog() {
             <option value="">Вся география</option>
             ${state.areas.map(a => `<option ${state.f.area === a ? "selected" : ""}>${a}</option>`).join("")}
           </select>
+          <select class="select" id="cat-sort" title="Сортировка">
+            <option value="rating" ${state.f.sort === "rating" ? "selected" : ""}>⭐ по рейтингу</option>
+            <option value="name" ${state.f.sort === "name" ? "selected" : ""}>А→Я по названию</option>
+            <option value="time" ${state.f.sort === "time" ? "selected" : ""}>⏱ по времени</option>
+            <option value="budget" ${state.f.sort === "budget" ? "selected" : ""}>₽ по бюджету</option>
+          </select>
         </div>
         <div class="filter-row" id="cat-tags">${tagBtns}</div>
       </div>
@@ -278,6 +284,7 @@ function renderCatalog() {
     </div>`;
   $("#cat-search").addEventListener("input", e => { state.f.q = e.target.value; renderCatGrid(); });
   $("#cat-area").addEventListener("change", e => { state.f.area = e.target.value; renderCatGrid(); });
+  $("#cat-sort").addEventListener("change", e => { state.f.sort = e.target.value; renderCatGrid(); });
   $$("#cat-tags .chip-btn").forEach(b => b.addEventListener("click", () => {
     state.f.tag = state.f.tag === b.dataset.tag ? "" : b.dataset.tag;
     renderCatalog();
@@ -293,6 +300,13 @@ function renderCatGrid() {
     (!state.f.area || a.area === state.f.area) &&
     (!state.f.tag || a.tags.includes(state.f.tag)) &&
     (!q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)));
+  const SORTS = {
+    rating: (a, b) => b.rating - a.rating,
+    name: (a, b) => a.name.localeCompare(b.name, "ru"),
+    time: (a, b) => b.duration_h - a.duration_h,
+    budget: (a, b) => a.budget - b.budget,
+  };
+  items.sort(SORTS[state.f.sort] || SORTS.rating);
   grid.innerHTML = items.length
     ? items.map(attractionCard).join("")
     : `<div class="empty" style="grid-column:1/-1"><div class="big">🔍</div>Ничего не нашлось. Попробуйте убрать фильтры.</div>`;
@@ -522,6 +536,7 @@ function renderQuizResult() {
         <button class="btn btn-primary" id="q-again">🔄 Пройти заново</button>
         <button class="btn btn-outline" id="plan-copy">🔗 Скопировать ссылку</button>
         <button class="btn btn-outline" id="plan-text">📋 План текстом</button>
+        <button class="btn btn-outline" id="plan-print">🖨 Печать</button>
         <a class="btn btn-outline" href="#/catalog">Открыть каталог</a>
       </div>
     </div>`;
@@ -537,6 +552,7 @@ function renderQuizResult() {
   });
   $("#plan-copy").addEventListener("click", copyPlanLink);
   $("#plan-text").addEventListener("click", copyPlanText);
+  $("#plan-print").addEventListener("click", () => { document.body.classList.add("print-plan"); window.print(); });
 }
 
 /* ---------------- news ---------------- */
@@ -544,7 +560,7 @@ async function renderNews(refresh = false) {
   if (refresh) state.newsLoading = true;
   view.innerHTML = `
     <div class="section">
-      <div class="news-head">
+      <div class="news-head" id="news-head">
         <div>
           <h2 style="margin:0">Новости Крыма</h2>
           <div class="news-status">
@@ -557,6 +573,8 @@ async function renderNews(refresh = false) {
             <button class="chip-btn ${state.newsView.onlyCrimea ? "active" : ""}" data-nv="crimea">🌊 Крым</button>
             <button class="chip-btn ${!state.newsView.onlyCrimea ? "active" : ""}" data-nv="all">Все ленты</button>
           </div>
+          <input class="search news-search" id="news-search" placeholder="Поиск по новостям…"
+            value="${state.newsView.q}" />
           <button class="btn btn-outline btn-sm" id="news-refresh" ${state.newsLoading ? "disabled" : ""}>
             ${state.newsLoading ? "Обновляем…" : "↻ Обновить"}
           </button>
@@ -567,6 +585,10 @@ async function renderNews(refresh = false) {
       <div id="news-list"></div>
     </div>`;
   $("#news-refresh").addEventListener("click", () => renderNews(true));
+  $("#news-search").addEventListener("input", e => {
+    state.newsView.q = e.target.value;
+    renderNewsBody();
+  });
   $$("#news-head [data-nv]").forEach(b => b.addEventListener("click", () => {
     state.newsView.onlyCrimea = b.dataset.nv === "crimea";
     renderNews();
@@ -609,11 +631,13 @@ function renderNewsBody() {
     state.newsView.topic = b.dataset.t;
     renderNewsBody();
   }));
-  const items = pool.filter(x => state.newsView.topic === "all"
-    || (x.topics || []).includes(state.newsView.topic));
+  const q = state.newsView.q.trim().toLowerCase();
+  const items = pool.filter(x =>
+    (state.newsView.topic === "all" || (x.topics || []).includes(state.newsView.topic)) &&
+    (!q || x.title.toLowerCase().includes(q) || (x.summary || "").toLowerCase().includes(q)));
   $("#news-list").innerHTML = items.length
     ? items.map(newsItemHTML).join("")
-    : `<div class="empty"><div class="big">📭</div>По этой теме пока пусто.</div>`;
+    : `<div class="empty"><div class="big">📭</div>${q ? "Ничего не нашлось по запросу." : "По этой теме пока пусто."}</div>`;
 }
 
 /* ---------------- modal ---------------- */
@@ -652,14 +676,28 @@ function openModal(id) {
           <div class="tip">💡 ${a.tips}</div>
           <div class="modal-actions">
             <a class="btn btn-primary btn-sm" href="${mapUrl}" target="_blank" rel="noopener">🗺 Открыть на карте</a>
+            <button class="btn btn-outline btn-sm" id="m-share">🔗 Поделиться</button>
             <button class="btn btn-outline btn-sm" id="m-close2">Закрыть</button>
           </div>
         </div>
       </div>
     </div>`;
-  const close = () => { $("#modal-root").innerHTML = ""; document.body.style.overflow = ""; };
+  const close = () => {
+    $("#modal-root").innerHTML = ""; document.body.style.overflow = "";
+    // Модалка открыта по прямой ссылке #/place/<id> — уходим в каталог.
+    if (hashParts().path.startsWith("place/")) {
+      history.replaceState(null, "", location.pathname + "#/catalog");
+    }
+  };
+  state._closeModal = close;
   $("#m-close").addEventListener("click", close);
   $("#m-close2").addEventListener("click", close);
+  $("#m-share").addEventListener("click", () => {
+    const url = location.origin + location.pathname + "#/place/" + a.id;
+    const done = () => toast("🔗 Ссылка на место скопирована");
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(done, () => fallbackCopy(url, done));
+    else fallbackCopy(url, done);
+  });
   $("#overlay").addEventListener("click", e => { if (e.target.id === "overlay") close(); });
   document.body.style.overflow = "hidden";
 }
@@ -800,8 +838,14 @@ function drawMap() {
 /* ---------------- router / init ---------------- */
 function route() {
   const { path, query } = hashParts();
-  $$(".nav a").forEach(a => a.classList.toggle("active", a.dataset.nav === path || (path === "home" && a.dataset.nav === "home")));
-  if (path === "catalog") renderCatalog();
+  const navPath = path.startsWith("place/") ? "catalog" : path;
+  $$(".nav a").forEach(a => a.classList.toggle("active", a.dataset.nav === navPath || (navPath === "home" && a.dataset.nav === "home")));
+  if (path.startsWith("place/")) {
+    // Прямая ссылка на место: каталог фоном + модалка поверх.
+    renderCatalog();
+    openModal(decodeURIComponent(path.slice(6)));
+  }
+  else if (path === "catalog") renderCatalog();
   else if (path === "map") renderMap();
   else if (path === "quiz") {
     if (!state.quizResult && !state.planAutoDone) {
@@ -818,11 +862,31 @@ function route() {
   window.scrollTo({ top: 0 });
 }
 
-window.addEventListener("hashchange", route);
-window.addEventListener("keydown", e => { if (e.key === "Escape") $("#modal-root").innerHTML = ""; });
+window.addEventListener("hashchange", () => {
+  $(".nav")?.classList.remove("open");
+  $("#nav-toggle")?.setAttribute("aria-expanded", "false");
+  route();
+});
+window.addEventListener("keydown", e => {
+  if (e.key === "Escape" && $("#modal-root").innerHTML) {
+    if (state._closeModal) state._closeModal();
+    else $("#modal-root").innerHTML = "";
+  }
+});
+window.addEventListener("afterprint", () => document.body.classList.remove("print-plan"));
+
+$("#nav-toggle").addEventListener("click", () => {
+  const nav = $(".nav");
+  nav.classList.toggle("open");
+  $("#nav-toggle").setAttribute("aria-expanded", String(nav.classList.contains("open")));
+});
 
 (async function init() {
   loadFavs();
+  // PWA: офлайн-оболочка (статика + последний ответ API)
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
   try {
     const [meta, areas, attr, quiz] = await Promise.all([
       api("/api/tags"), api("/api/areas"), api("/api/attractions"), api("/api/quiz"),

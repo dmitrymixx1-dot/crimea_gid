@@ -18,7 +18,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt pytest
       - name: JS syntax check
-        run: node --check static/app.js
+        run: |
+          node --check static/app.js
+          node --check static/sw.js
       - name: Test suite
         run: python -m pytest -q
 
