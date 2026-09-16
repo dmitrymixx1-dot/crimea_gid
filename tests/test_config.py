@@ -54,3 +54,18 @@ def test_env_override(monkeypatch):
 def test_open_meteo_url():
     assert config.OPEN_METEO_URL.startswith("https://")
     assert "open-meteo.com" in config.OPEN_METEO_URL
+
+
+def test_version_is_consistent_everywhere():
+    """APP_VERSION — единый источник правды: README, sw.js и docs/api.md
+    обязаны называть ту же версию (иначе PWA-кэш и доки врут)."""
+    root = config.BASE_DIR.parent
+    expected = config.APP_VERSION
+    checks = [
+        (root / "README.md", r"\*\*Версия ([\d.]+)\*\*"),
+        (root / "static" / "sw.js", r'crimea-gid-v([\d.]+)"'),
+        (root / "docs" / "api.md", r'"version": "([\d.]+)"'),
+    ]
+    for path, pattern in checks:
+        found = set(re.findall(pattern, path.read_text(encoding="utf-8")))
+        assert found == {expected}, f"{path.name}: {found} != {expected}"

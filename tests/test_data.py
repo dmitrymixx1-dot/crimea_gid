@@ -1,6 +1,12 @@
 from app.services.load import get_attractions, get_quiz, get_snapshot, get_sources
-from app.services.recommend import (AREA_LABEL, DAYS_BY_DURATION,
-                                    ITINERARY_DAYS, PROFILES, TAGS, TYPE_META)
+from app.services.recommend import (
+    AREA_LABEL,
+    DAYS_BY_DURATION,
+    ITINERARY_DAYS,
+    PROFILES,
+    TAGS,
+    TYPE_META,
+)
 
 
 def test_attractions_have_coordinates():
@@ -108,6 +114,42 @@ def test_quiz_option_ids_unique_per_question():
     for q in get_quiz()["questions"]:
         ids = [o["id"] for o in q["options"]]
         assert len(ids) == len(set(ids)), q["id"]
+
+
+def test_quiz_options_match_quiz_model():
+    """Literal в QuizIn — в точности id опций из quiz.json.
+
+    Иначе API либо отвергнет честные ответы фронта (422),
+    либо пропустит мусор, который evaluate() молча отбросит.
+    """
+    from typing import get_args
+
+    from app.main import QuizIn
+
+    def literal_values(ann) -> set:
+        vals = set()
+        for a in get_args(ann):
+            if isinstance(a, str):
+                vals.add(a)
+            else:
+                vals |= literal_values(a)
+        return vals
+
+    options = {q["id"]: {o["id"] for o in q["options"]}
+               for q in get_quiz()["questions"]}
+    assert set(QuizIn.model_fields) == set(options), \
+        "поля QuizIn и вопросы quiz.json разошлись"
+    for name, allowed in options.items():
+        assert literal_values(QuizIn.model_fields[name].annotation) == allowed, \
+            f"поле {name}: Literal не совпадает с quiz.json"
+    # Дефолты модели — тоже честные значения.
+    defaults = QuizIn()
+    for name, allowed in options.items():
+        value = getattr(defaults, name)
+        if isinstance(value, list):
+            assert set(value) <= allowed, name
+        else:
+            assert value in allowed, name
 
 
 def test_profiles_have_all_fields():

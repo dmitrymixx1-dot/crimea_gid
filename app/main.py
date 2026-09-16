@@ -3,6 +3,8 @@
 Запуск:
     uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
+from typing import Literal
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,7 +14,7 @@ from .config import APP_VERSION, STATIC_DIR
 from .services.load import get_attractions, get_quiz
 from .services.news import news_service
 from .services.recommend import TAGS, TYPE_META, evaluate
-from .services.weather import weather_service
+from .services.weather import CITY_IDS, weather_service
 
 app = FastAPI(title="Крым.Гид", version=APP_VERSION)
 
@@ -26,13 +28,19 @@ async def security_headers(request, call_next):
 
 
 class QuizIn(BaseModel):
-    purpose: list[str] = Field(default_factory=list)
-    season: str = "any"
-    tempo: str = "medium"
-    budget: str = "comfort"
-    party: str = "solo"
-    duration: str = "3-5"
-    transport: str = "car"
+    """Ответы квиза. Допустимые значения — в точности `id` опций
+    из `app/data/quiz.json` (согласованность закрыта тестом
+    `test_data.py::test_quiz_options_match_quiz_model`);
+    мусор отклоняется с 422, а не превращается в дефолты."""
+
+    purpose: list[Literal["beach", "nature", "history", "food",
+                          "family", "photo", "extreme"]] = Field(default_factory=list)
+    season: Literal["summer", "autumn", "spring", "winter", "any"] = "any"
+    tempo: Literal["relax", "medium", "active"] = "medium"
+    budget: Literal["economy", "comfort", "premium"] = "comfort"
+    party: Literal["solo", "couple", "family", "friends"] = "solo"
+    duration: Literal["1-2", "3-5", "6-10", "10+"] = "3-5"
+    transport: Literal["car", "transit"] = "car"
 
 
 @app.get("/api/health")
@@ -69,9 +77,10 @@ async def attraction_detail(attraction_id: str):
     и внешним потребителям API."""
     for a in get_attractions():
         if a["id"] == attraction_id:
-            return {**a, "type_meta": TYPE_META.get(
-                a["type"], {"emoji": "📍", "label": a["type"], "img": "cat_nature.jpg"})}
-    raise HTTPException(status_code=404, detail=f"место «{attraction_id}» не найдено")
+            fallback = {"emoji": "📍", "label": a["type"], "img": "cat_nature.jpg"}
+            return {**a, "type_meta": TYPE_META.get(a["type"], fallback)}
+    raise HTTPException(
+        status_code=404, detail=f"место «{attraction_id}» не найдено")
 
 
 @app.get("/api/areas")
@@ -104,6 +113,8 @@ async def news(limit: int = Query(40, ge=1, le=100),
 
 @app.get("/api/weather")
 async def weather(city: str | None = None, refresh: bool = False):
+    if city is not None and city not in CITY_IDS:
+        raise HTTPException(status_code=404, detail=f"город «{city}» не найден")
     return await weather_service.get(city=city, refresh=refresh)
 
 

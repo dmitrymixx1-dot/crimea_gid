@@ -11,7 +11,6 @@ import pytest
 
 from app.services.weather import CITIES, WEEKDAYS, WeatherService, _code_info
 
-
 # --------------------------------------------------------------------------
 # _code_info: WMO-коды → (эмодзи, подпись)
 # --------------------------------------------------------------------------
@@ -210,10 +209,11 @@ def test_get_filters_single_city():
     assert calls["n"] == 1
 
 
-def test_get_unknown_city_returns_everyone():
+def test_get_unknown_city_raises_key_error():
+    """Неизвестный город — KeyError (на HTTP-слое превращается в 404)."""
     fake, _ = _stub_fetch()
-    out = asyncio.run(_svc(fake).get(city="gotham"))
-    assert len(out["cities"]) == len(CITIES)
+    with pytest.raises(KeyError, match="gotham"):
+        asyncio.run(_svc(fake).get(city="gotham"))
 
 
 def test_cache_ttl_avoids_refetch():

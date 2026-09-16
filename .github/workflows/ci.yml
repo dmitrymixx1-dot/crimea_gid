@@ -16,11 +16,16 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest
+          pip install -r requirements.txt pytest ruff
+      - name: Lint (ruff)
+        run: ruff check app tests
       - name: JS syntax check
         run: |
           node --check static/app.js
+          node --check static/plan-link.js
           node --check static/sw.js
+      - name: JS unit tests
+        run: node --test "tests/js/*.test.js"
       - name: Test suite
         run: python -m pytest -q
 

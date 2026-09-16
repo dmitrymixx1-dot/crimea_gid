@@ -23,17 +23,21 @@ python3 -m venv .venv
 .venv/bin/python -m pytest tests/ -q        # весь свит
 .venv/bin/python -m pytest tests/test_news.py -q   # один модуль
 .venv/bin/python -m pytest tests/ -k weather -q    # по имени
-node --check static/app.js && node --check static/sw.js
+node --test "tests/js/*.test.js"            # JS-тесты шаринга плана
+node --check static/app.js && node --check static/plan-link.js \
+  && node --check static/sw.js
+.venv/bin/ruff check app tests              # линтер
 ```
 
-**135 тестов**, сеть не используется (все внешние вызовы заглушены):
+**142 Python-теста**, сеть не используется (все внешние вызовы заглушены),
+плюс **6 JS-тестов** (`tests/js/plan-link.test.js`, `node:test` без зависимостей):
 
 | Модуль | Что покрывает |
 |---|---|
-| `test_api.py` | эндпоинты, фильтры (в т.ч. `tag=extreme`, `area=Западный`), заголовки безопасности, PWA-маршруты, 404/422 |
-| `test_data.py` | схемы данных, границы координат, **якорные координаты** (`ANCHORS` — сверено с OSM), объём каталога и покрытие районов, согласованность каталога/квиза со словарями кода, источники, файлы картинок типов |
+| `test_api.py` | эндпоинты, фильтры (в т.ч. `tag=extreme`, `area=Западный`), заголовки безопасности, PWA-маршруты, контракт 422 (квиз) / 404 (погода) |
+| `test_data.py` | схемы данных, границы координат, **якорные координаты** (`ANCHORS` — сверено с OSM), объём каталога и покрытие районов, согласованность каталога/квиза со словарями кода и `QuizIn`, источники, файлы картинок типов |
 | `test_load.py` | загрузчик JSON: схемы, кэширование, ошибка на отсутствующий файл |
-| `test_config.py` | формат версии, дефолты, переопределение через env, пути |
+| `test_config.py` | формат версии, **согласованность версий** (код/README/SW/доки), дефолты, переопределение через env, пути |
 | `test_recommends.py` | матчинг (`_score_attraction` по факторам), профили, фильтры новостей, планировщик (слоты, районы, лимиты, запас) |
 | `test_news.py` | скоринг «Крым», темы, дедупликация, TTL и файл-кэш, офлайн-fallback, форма payload |
 | `test_telegram.py` | парсер `t.me/s/`, сквозной поток telegram-источника |
@@ -48,20 +52,25 @@ node --check static/app.js && node --check static/sw.js
   заглушками (см. `test_news.py`, `test_weather.py`).
 - Новый эндпоинт — плюс тест в `test_api.py`; новое правило данных —
   плюс тест в `test_data.py`.
+- Чистые JS-функции, от которых зависит шаринг/роутинг, — в отдельные
+  файлы вида `static/plan-link.js` (UMD: `window` + `module.exports`)
+  с тестами в `tests/js/`.
 
 ## CI
 
 GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 и на PR:
 
-1. **test** — install deps → `node --check static/app.js` и
-   `static/sw.js` → `pytest -q`;
+1. **test** — install deps → `ruff check app tests` →
+   `node --check` (`app.js`, `plan-link.js`, `sw.js`) →
+   `node --test "tests/js/*.test.js"` → `pytest -q`;
 2. **docker** — сборка образа (после успешных тестов).
 
 ## Стиль кода
 
 - Python: PEP 8, строки ≤ 88 символов, docstring на модулях, публичных
   классах и нетривиальных функциях. Комментарии и сообщения — на русском.
+  Стиль enforced: `ruff check app tests` (конфиг — `pyproject.toml`).
 - Типизация: аннотации в сигнатурах сервисов (`dict`, `list[dict]`,
   `tuple[...]`); `pydantic.BaseModel` для тел запросов.
 - JS: ES2020, без транспиляции; `$`/`$$` — хелперы селекторов; состояние —
@@ -105,7 +114,9 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 
 ## Релиз
 
-1. Поднять `APP_VERSION` в `app/config.py` (semver) и версию в README;
-   при PWA-меняющихся правках — бампнуть `CACHE` в `static/sw.js`.
-2. Прогнать `pytest` и `node --check`.
-3. PR в `main`: CI обязан быть зелёным (test + docker build).
+1. Поднять `APP_VERSION` в `app/config.py` (semver), версию в README,
+   пример в `docs/api.md` и `CACHE` в `static/sw.js`
+   (согласованность проверяет `test_config.py`).
+2. Прогнать `ruff check`, `pytest`, `node --check` и `node --test`.
+3. Записать изменения в `CHANGELOG.md`.
+4. PR в `main`: CI обязан быть зелёным (test + docker build).

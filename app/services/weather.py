@@ -5,11 +5,10 @@
 """
 import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
-from .. import config
 from ..config import OPEN_METEO_URL, WEATHER_HTTP_TIMEOUT, WEATHER_TTL
 
 # Курорты: id, название, координаты.
@@ -33,6 +32,8 @@ CITIES = [
     ("partenit", "Партенит", 44.5764, 34.3397),
     ("simeiz", "Симеиз", 44.4053, 34.0044),
 ]
+
+CITY_IDS = frozenset(c[0] for c in CITIES)
 
 # WMO weather code → (эмодзи, подпись)
 WMO = {
@@ -112,7 +113,9 @@ class WeatherService:
         now = time.time()
         wanted = CITIES
         if city:
-            wanted = [c for c in CITIES if c[0] == city] or CITIES[:0] or CITIES
+            wanted = [c for c in CITIES if c[0] == city]
+            if not wanted:
+                raise KeyError(f"город «{city}» не найден")
 
         results: dict[str, dict] = {}
         stale: list[tuple] = []
@@ -129,7 +132,8 @@ class WeatherService:
                     *(self._fetch_city(client, c[0], c[1], c[2], c[3]) for c in stale),
                     return_exceptions=True,
                 )
-            for c, res in zip(stale, gathered):
+            # gather возвращает ровно по результату на город — strict фиксирует это.
+            for c, res in zip(stale, gathered, strict=True):
                 if isinstance(res, Exception):
                     results[c[0]] = self._unavailable(c[0], c[1])
                 else:
@@ -140,7 +144,7 @@ class WeatherService:
         online = any(c["available"] for c in cities)
         return {
             "online": online,
-            "updated_at": datetime.now(timezone.utc).astimezone().isoformat(),
+            "updated_at": datetime.now(UTC).astimezone().isoformat(),
             "cities": cities,
         }
 

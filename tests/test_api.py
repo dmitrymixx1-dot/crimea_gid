@@ -1,5 +1,7 @@
 import urllib.parse
 
+from app.config import APP_VERSION
+
 
 def test_health(client):
     r = client.get("/api/health")
@@ -206,4 +208,39 @@ def test_quiz_evaluate_extreme_profile(client):
 
 
 def test_health_reports_new_version(client):
-    assert client.get("/api/health").json()["version"] == "0.10.0"
+    assert client.get("/api/health").json()["version"] == APP_VERSION
+
+
+# ---------------- контракт API (0.11.0) ----------------
+
+def test_quiz_evaluate_rejects_garbage_values(client):
+    r = client.post("/api/quiz/evaluate", json={
+        "purpose": ["beach"], "season": "never", "budget": "free",
+        "tempo": "turbo", "party": "aliens", "duration": "100",
+        "transport": "teleport",
+    })
+    assert r.status_code == 422
+
+
+def test_quiz_evaluate_rejects_bad_purpose(client):
+    r = client.post("/api/quiz/evaluate", json={"purpose": ["teleport"]})
+    assert r.status_code == 422
+
+
+def test_quiz_evaluate_empty_purpose_defaults_to_beach(client):
+    r = client.post("/api/quiz/evaluate", json={"purpose": []})
+    assert r.status_code == 200
+    d = r.json()
+    assert d["answers"]["purpose"] == ["beach"]
+    assert d["recommendations"]
+
+
+def test_weather_unknown_city_404(client):
+    r = client.get("/api/weather?city=gotham")
+    assert r.status_code == 404
+    assert "не найден" in r.json()["detail"]
+
+
+def test_weather_single_city_filter(client):
+    d = client.get("/api/weather?city=yalta").json()
+    assert [c["id"] for c in d["cities"]] == ["yalta"]

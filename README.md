@@ -1,6 +1,6 @@
 # 🌊 Крым.Гид
 
-**Версия 0.10.0** — туристический помощник по Крыму: **квиз** подберёт
+**Версия 0.11.0** — туристический помощник по Крыму: **квиз** подберёт
 места под ваши интересы и разложит их по дням, **каталог** — 52 проверенные
 точки с координатами, **схема-карта** полуострова, **лента** собирает новости
 из 7 RSS-лент и 4 телеграм-каналов, **погода** — по 18 курортам.
@@ -84,7 +84,8 @@ docker run -p 8000:8000 -v crimea-cache:/srv/cache crimea-gid
 ### CI
 
 GitHub Actions (`.github/workflows/ci.yml`) на каждый push и PR:
-тестовый свит (pytest), синтаксис JS и сборка Docker-образа.
+линтер (ruff), тестовый свит (pytest), синтаксис и юнит-тесты JS
+(`node --test`) и сборка Docker-образа.
 
 ## Переменные окружения
 
@@ -101,16 +102,18 @@ GitHub Actions (`.github/workflows/ci.yml`) на каждый push и PR:
 ```bash
 .venv/bin/pip install pytest
 .venv/bin/python -m pytest tests/ -q
+node --test "tests/js/*.test.js"
 ```
 
-**135 тестов**, сеть не используется. Модули: `test_api.py` (эндпоинты,
-фильтры, заголовки, PWA), `test_data.py` (схемы данных, согласованность
-со словарями кода), `test_load.py` (загрузчик JSON), `test_config.py`
-(дефолты, env), `test_recommends.py` (матчинг по факторам, планировщик),
-`test_news.py` (скоринг «Крым», темы, дедупликация, кэши, офлайн),
-`test_telegram.py` (парсер t.me/s/), `test_weather.py` (WMO-коды,
-разбор Open-Meteo, кэш, падение сети). Подробности —
-[docs/development.md](docs/development.md#тесты).
+**142 Python-теста**, сеть не используется. Модули: `test_api.py` (эндпоинты,
+фильтры, заголовки, PWA, контракт 422/404), `test_data.py` (схемы данных,
+согласованность со словарями кода и `QuizIn`), `test_load.py` (загрузчик JSON),
+`test_config.py` (дефолты, env, согласованность версий), `test_recommends.py`
+(матчинг по факторам, планировщик), `test_news.py` (скоринг «Крым», темы,
+дедупликация, кэши, офлайн), `test_telegram.py` (парсер t.me/s/),
+`test_weather.py` (WMO-коды, разбор Open-Meteo, кэш, падение сети).
+Плюс **6 JS-тестов** шаринга плана (`tests/js/`, `node:test` без зависимостей).
+Подробности — [docs/development.md](docs/development.md#тесты).
 
 ## API
 
@@ -147,11 +150,12 @@ app/
     news_snapshot.json     # офлайн-снимок новостей
 static/
   index.html / style.css / app.js   # SPA (vanilla JS, без сборки)
+  plan-link.js                       # шаринг плана по ссылке (есть JS-тесты)
   sw.js / manifest.webmanifest       # PWA: офлайн-оболочка
   img/                               # hero + категорийные изображения + иконки
 docs/                              # документация: API, архитектура, данные, dev-гид
-tests/                             # pytest (135 тестов, без сети)
-.github/workflows/ci.yml           # CI: тесты + JS + docker build
+tests/                             # pytest (142 теста, без сети) + tests/js (node:test)
+.github/workflows/ci.yml           # CI: ruff + тесты + JS + docker build
 ```
 
 ## Как расширять
