@@ -9,6 +9,21 @@ const TOPIC_LABELS = {
   history: "🏛️ История",
 };
 
+/* Экранирование для атрибутов/текста, которые собираем в шаблонах. */
+const esc = s => String(s ?? "").replace(/[&<>"']/g,
+  c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+/* Авария загрузки картинки: inline-обработчики запрещены CSP, поэтому
+   одна делегированная пойма (capture) смотрит на data-img-fallback. */
+document.addEventListener("error", e => {
+  const el = e.target;
+  if (!el || el.tagName !== "IMG") return;
+  const mode = el.dataset.imgFallback;
+  if (mode === "remove") el.remove();
+  else if (mode === "hide") el.style.display = "none";
+  else if (mode === "soft") el.style.background = "var(--sea-soft)";
+}, true);
+
 const state = {
   meta: { tags: {}, types: {} },
   attractions: [],
@@ -65,19 +80,19 @@ function fmtTime(iso) {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
-function hashParts() {
-  const h = location.hash.replace(/^#\/?/, "");
-  const [path, query = ""] = h.split("?");
-  return { path: path || "home", query: new URLSearchParams(query) };
-}
-
 function tagLabel(t) { return state.meta.tags[t] || t; }
 
 function budgetIcons(b) { return "₽".repeat(b) + `<span class="muted">${"₽".repeat(3 - b)}</span>`; }
 
+/* Осмысленный alt категорийной картинки: что изображено, без дубля
+   названия места (оно и так рядом в заголовке карточки). */
+function typeAlt(meta) { return `Иллюстрация категории «${meta.label || meta.img}»`; }
+
 function favBtn(id) {
   return `<button class="fav-btn ${state.favs.has(id) ? "on" : ""}" data-fav="${id}"
-    title="${state.favs.has(id) ? "Убрать из избранного" : "В избранное"}">♥</button>`;
+    aria-pressed="${state.favs.has(id)}"
+    title="${state.favs.has(id) ? "Убрать из избранного" : "В избранное"}"
+    aria-label="${state.favs.has(id) ? "Убрать из избранного" : "В избранное"}">♥</button>`;
 }
 
 /* ---------------- news ---------------- */
@@ -102,24 +117,24 @@ function updateNetBadge() {
 
 /* ---------------- cards ---------------- */
 function attractionCard(a) {
-  const meta = state.meta.types[a.type] || { emoji: "📍", img: "cat_nature.jpg" };
+  const meta = state.meta.types[a.type] || { emoji: "📍", img: "cat_nature.jpg", label: a.type };
   const chips = a.tags.slice(0, 3)
     .map(t => `<span class="chip">${tagLabel(t)}</span>`).join("");
   return `
     <article class="card" data-id="${a.id}">
       <div class="card-img">
-        <img src="/static/img/${meta.img}" alt="" loading="lazy"
-             onerror="this.remove()" />
+        <img src="/static/img/${meta.img}" alt="${esc(typeAlt(meta))}" loading="lazy"
+             decoding="async" data-img-fallback="remove" />
         ${favBtn(a.id)}
-        <div class="emoji">${meta.emoji}</div>
+        <div class="emoji" aria-hidden="true">${meta.emoji}</div>
       </div>
       <div class="card-body">
-        <h3 class="card-title">${a.name}</h3>
-        <div class="card-region">📍 ${a.region}</div>
-        <p class="card-desc">${a.description}</p>
+        <h3 class="card-title"><a href="#/place/${a.id}">${esc(a.name)}</a></h3>
+        <div class="card-region">📍 ${esc(a.region)}</div>
+        <p class="card-desc">${esc(a.description)}</p>
         <div class="card-chips">${chips}</div>
         <div class="card-meta">
-          <span><span class="star">★</span> <b>${a.rating.toFixed(1)}</b></span>
+          <span><span class="star" aria-hidden="true">★</span> <b>${a.rating.toFixed(1)}</b></span>
           <span>${budgetIcons(a.budget)}</span>
           <span>⏱ ${a.duration_h} ч</span>
         </div>
@@ -134,12 +149,12 @@ function newsItemHTML(it) {
   return `
     <div class="news-item">
       <div class="news-left">
-        <span class="source-badge">${it.source}</span>
+        <span class="source-badge">${esc(it.source)}</span>
         <span class="news-time">${fmtTime(it.published)}</span>
       </div>
       <div class="news-body">
-        <h3 class="news-title"><a href="${it.link}" target="_blank" rel="noopener">${it.title}</a></h3>
-        ${it.summary ? `<p class="news-summary">${it.summary}</p>` : ""}
+        <h3 class="news-title"><a href="${esc(it.link)}" target="_blank" rel="noopener">${esc(it.title)}</a></h3>
+        ${it.summary ? `<p class="news-summary">${esc(it.summary)}</p>` : ""}
         ${topics ? `<div class="news-topics">${topics}</div>` : ""}
       </div>
     </div>`;
@@ -190,7 +205,8 @@ function renderHome() {
   ];
   view.innerHTML = `
     <section class="hero">
-      <img src="/static/img/hero.jpg" alt="Южный берег Крыма" onerror="this.style.display='none'" />
+      <img src="/static/img/hero.jpg" alt="Южный берег Крыма на закате"
+           fetchpriority="high" decoding="async" data-img-fallback="hide" />
       <div class="hero-content">
         <h1>Крым подскажет,<br />куда вам сходить</h1>
         <p>Пройдите квиз за минуту — соберём маршрут под ваши интересы.
@@ -216,8 +232,10 @@ function renderHome() {
       </div>
       <div class="grid">
         ${cats.map(([t, img]) => `
-          <a class="card cat-tile" href="#/catalog?tag=${t}" style="text-decoration:none">
-            <div class="card-img"><img src="/static/img/${img}" alt="" loading="lazy" onerror="this.remove()"/></div>
+          <a class="card cat-tile" href="#/catalog?tag=${t}">
+            <div class="card-img"><img src="/static/img/${img}"
+              alt="Иллюстрация категории «${esc(tagLabel(t))}»"
+              loading="lazy" decoding="async" data-img-fallback="remove"/></div>
             <div class="card-body">
               <h3 class="card-title">${tagLabel(t)}</h3>
               <div class="card-region">места с тегом «${t}»</div>
@@ -255,23 +273,49 @@ function renderHome() {
 }
 
 /* ---------------- catalog ---------------- */
-function renderCatalog() {
-  const { path, query } = hashParts();
-  const presetTag = query.get("tag") || "";
-  if (presetTag) state.f.tag = presetTag;
+/* Фильтры каталога живут в URL (#/catalog?tag=&area=&q=&sort=): подборку
+   можно скопировать и открыть у другого человека. URL — источник правды
+   при входе по ссылке; дальше состояние держим в state.f и зеркалим
+   его в адрес через replaceState (без спама в истории). */
+function syncCatalogUrl() {
+  const { path } = hashParts();
+  if (path !== "catalog") return;  // не трогаем #/place/… и другие маршруты
+  const q = CatalogLink.buildCatalogQuery(state.f);
+  const target = "#/catalog" + (q ? "?" + q : "");
+  if (location.hash !== target) {
+    history.replaceState(null, "", location.pathname + target);
+  }
+}
+
+function copyCatalogLink() {
+  const url = CatalogLink.catalogUrl(state.f, location.origin, location.pathname);
+  const done = () => toast("🔗 Ссылка на подборку скопирована");
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(done, () => fallbackCopy(url, done));
+  else fallbackCopy(url, done);
+}
+
+function renderCatalog(focusTag) {
   const tagBtns = Object.keys(state.meta.tags).map(t => `
-    <button class="chip-btn ${state.f.tag === t ? "active" : ""}" data-tag="${t}">${tagLabel(t)}</button>`).join("");
+    <button class="chip-btn ${state.f.tag === t ? "active" : ""}" data-tag="${t}"
+      aria-pressed="${state.f.tag === t}">${tagLabel(t)}</button>`).join("");
   view.innerHTML = `
     <div class="section">
-      <div class="section-head"><h2>Каталог мест</h2><span class="count-note" id="cat-count"></span></div>
+      <div class="section-head"><h2>Каталог мест</h2>
+        <span style="display:flex;gap:10px;align-items:center">
+          <span class="count-note" id="cat-count"></span>
+          <button class="btn btn-outline btn-sm" id="cat-share"
+            title="Скопировать ссылку на текущую подборку">🔗 Ссылка на подборку</button>
+        </span>
+      </div>
       <div class="filters">
         <div class="filter-row">
-          <input class="search" id="cat-search" placeholder="Поиск: Ласточкино, вино, пляж…" value="${state.f.q}" />
-          <select class="select" id="cat-area">
+          <input class="search" id="cat-search" placeholder="Поиск: Ласточкино, вино, пляж…"
+            aria-label="Поиск по каталогу" value="${esc(state.f.q)}" />
+          <select class="select" id="cat-area" aria-label="Географический район">
             <option value="">Вся география</option>
-            ${state.areas.map(a => `<option ${state.f.area === a ? "selected" : ""}>${a}</option>`).join("")}
+            ${state.areas.map(a => `<option value="${esc(a)}" ${state.f.area === a ? "selected" : ""}>${esc(a)}</option>`).join("")}
           </select>
-          <select class="select" id="cat-sort" title="Сортировка">
+          <select class="select" id="cat-sort" title="Сортировка" aria-label="Сортировка">
             <option value="rating" ${state.f.sort === "rating" ? "selected" : ""}>⭐ по рейтингу</option>
             <option value="name" ${state.f.sort === "name" ? "selected" : ""}>А→Я по названию</option>
             <option value="time" ${state.f.sort === "time" ? "selected" : ""}>⏱ по времени</option>
@@ -282,14 +326,20 @@ function renderCatalog() {
       </div>
       <div class="grid" id="cat-grid"></div>
     </div>`;
-  $("#cat-search").addEventListener("input", e => { state.f.q = e.target.value; renderCatGrid(); });
-  $("#cat-area").addEventListener("change", e => { state.f.area = e.target.value; renderCatGrid(); });
-  $("#cat-sort").addEventListener("change", e => { state.f.sort = e.target.value; renderCatGrid(); });
+  $("#cat-search").addEventListener("input", e => { state.f.q = e.target.value; renderCatGrid(); syncCatalogUrl(); });
+  $("#cat-area").addEventListener("change", e => { state.f.area = e.target.value; renderCatGrid(); syncCatalogUrl(); });
+  $("#cat-sort").addEventListener("change", e => { state.f.sort = e.target.value; renderCatGrid(); syncCatalogUrl(); });
+  $("#cat-share").addEventListener("click", copyCatalogLink);
   $$("#cat-tags .chip-btn").forEach(b => b.addEventListener("click", () => {
     state.f.tag = state.f.tag === b.dataset.tag ? "" : b.dataset.tag;
-    renderCatalog();
+    renderCatalog(b.dataset.tag);  // перерисовка + новый URL + возврат фокуса
   }));
   renderCatGrid();
+  syncCatalogUrl();
+  if (focusTag) {
+    const chip = $(`#cat-tags .chip-btn[data-tag="${focusTag}"]`);
+    if (chip) chip.focus();
+  }
 }
 
 function renderCatGrid() {
@@ -405,7 +455,7 @@ function dayCard(day) {
       ${day.stops.map(s => `
         <div class="stop" data-id="${s.id}">
           <span class="slot">${SLOT_META[s.slot]?.icon || "·"} ${SLOT_META[s.slot]?.label || s.slot}</span>
-          <span class="stop-name">${s.type_meta.emoji} ${s.name}</span>
+          <span class="stop-name"><a href="#/place/${s.id}">${s.type_meta.emoji} ${esc(s.name)}</a></span>
           <span class="muted stop-h">⏱ ${s.duration_h} ч</span>
         </div>`).join("")}
     </div>`;
@@ -495,15 +545,17 @@ function renderQuizResult() {
       ${r.recommendations.map(a => `
         <div class="rec-row" data-id="${a.id}">
           ${favBtn(a.id)}
-          <img class="rec-img" src="/static/img/${a.type_meta.img}" alt="" onerror="this.style.background='var(--sea-soft)'" />
+          <img class="rec-img" src="/static/img/${a.type_meta.img}"
+            alt="${esc(typeAlt(a.type_meta))}" loading="lazy" decoding="async"
+            data-img-fallback="soft" />
           <div class="rec-body">
-            <h3>${a.type_meta.emoji} ${a.name}</h3>
-            <div class="rec-region">📍 ${a.region} · ⏱ ${a.duration_h} ч · <span class="star">★</span> ${a.rating.toFixed(1)}</div>
+            <h3><a href="#/place/${a.id}">${a.type_meta.emoji} ${esc(a.name)}</a></h3>
+            <div class="rec-region">📍 ${esc(a.region)} · ⏱ ${a.duration_h} ч · <span class="star" aria-hidden="true">★</span> ${a.rating.toFixed(1)}</div>
             <div class="rec-reasons">
-              ${a.reasons.map(x => `<span class="chip">${x}</span>`).join("")}
+              ${a.reasons.map(x => `<span class="chip">${esc(x)}</span>`).join("")}
             </div>
           </div>
-          <span class="rec-score">${a.score}</span>
+          <span class="rec-score" title="балл совпадения">${a.score}</span>
         </div>`).join("")}
       ${r.itinerary && r.itinerary.days.length ? `
         <div class="section-head" style="margin-top:26px">
@@ -531,8 +583,15 @@ function renderQuizResult() {
         <a class="btn btn-outline" href="#/catalog">Открыть каталог</a>
       </div>
     </div>`;
-  $$(".rec-row").forEach(el => el.addEventListener("click", () => openModal(el.dataset.id)));
-  $$(".stop[data-id], .reserve-chips [data-id]").forEach(el =>
+  $$(".rec-row").forEach(el => el.addEventListener("click", e => {
+    if (e.target.closest("a")) return;  // ссылка на место уходит роутеру
+    openModal(el.dataset.id);
+  }));
+  $$(".stop[data-id]").forEach(el => el.addEventListener("click", e => {
+    if (e.target.closest("a")) return;
+    openModal(el.dataset.id);
+  }));
+  $$(".reserve-chips [data-id]").forEach(el =>
     el.addEventListener("click", () => openModal(el.dataset.id)));
   $("#q-again").addEventListener("click", () => {
     state.q = { step: 0, answers: {} };
@@ -565,7 +624,7 @@ async function renderNews(refresh = false) {
             <button class="chip-btn ${!state.newsView.onlyCrimea ? "active" : ""}" data-nv="all">Все ленты</button>
           </div>
           <input class="search news-search" id="news-search" placeholder="Поиск по новостям…"
-            value="${state.newsView.q}" />
+            aria-label="Поиск по новостям" value="${esc(state.newsView.q)}" />
           <button class="btn btn-outline btn-sm" id="news-refresh" ${state.newsLoading ? "disabled" : ""}>
             ${state.newsLoading ? "Обновляем…" : "↻ Обновить"}
           </button>
@@ -632,39 +691,69 @@ function renderNewsBody() {
 }
 
 /* ---------------- modal ---------------- */
+/* Focus trap: Tab/Shift+Tab циклятся внутри модалки, фокус входит в неё
+   при открытии и возвращается на прежний элемент при закрытии. */
+let _modalLastFocus = null;
+
+function modalFocusables() {
+  const modal = $("#modal-root .modal");
+  if (!modal) return [];
+  return $$("a[href], button:not([disabled]), input, select, textarea", modal)
+    .filter(el => el.getClientRects().length);
+}
+
+function trapModalTab(e) {
+  if (e.key !== "Tab") return;
+  const els = modalFocusables();
+  if (!els.length) return;
+  const first = els[0], last = els[els.length - 1];
+  const active = document.activeElement;
+  const modal = $("#modal-root .modal");
+  if (!modal.contains(active)) { e.preventDefault(); first.focus(); return; }
+  if (e.shiftKey && active === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
+}
+
 function bindCards(root = view) {
   $$("[data-fav]", root).forEach(b => b.addEventListener("click", e => {
     e.stopPropagation();
     toggleFav(b.dataset.fav);
   }));
+  // Клик по карточке открывает модалку; клик по внутренней ссылке
+  // (#/place/<id>) оставляет переход роутеру — так работает и клавиатура.
   $$(".card[data-id], .rec-row[data-id]", root).forEach(el =>
-    el.addEventListener("click", () => openModal(el.dataset.id)));
+    el.addEventListener("click", e => {
+      if (e.target.closest("a")) return;
+      openModal(el.dataset.id);
+    }));
 }
 
 function openModal(id) {
   const a = state.attractions.find(x => x.id === id);
   if (!a) return;
-  const meta = state.meta.types[a.type] || { emoji: "📍", img: "cat_nature.jpg" };
+  const meta = state.meta.types[a.type] || { emoji: "📍", img: "cat_nature.jpg", label: a.type };
   const mapUrl = "https://yandex.ru/maps/?text=" + encodeURIComponent(`Крым, ${a.name}`);
+  _modalLastFocus = document.activeElement;
   $("#modal-root").innerHTML = `
     <div class="overlay" id="overlay">
-      <div class="modal">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-title">
         <div class="modal-img">
-          <img src="/static/img/${meta.img}" alt="" onerror="this.style.display='none'" />
-          <button class="modal-close" id="m-close" aria-label="Закрыть">✕</button>
+          <img src="/static/img/${meta.img}" alt="${esc(typeAlt(meta))}"
+               data-img-fallback="hide" />
+          <button class="modal-close" id="m-close" aria-label="Закрыть карточку">✕</button>
         </div>
         <div class="modal-body">
-          <h2>${meta.emoji} ${a.name}</h2>
-          <div class="muted">📍 ${a.region} · ${a.area}</div>
-          <p style="margin-top:12px">${a.description}</p>
+          <h2 id="m-title">${meta.emoji} ${esc(a.name)}</h2>
+          <div class="muted">📍 ${esc(a.region)} · ${esc(a.area)}</div>
+          <p style="margin-top:12px">${esc(a.description)}</p>
           <div class="facts">
             <div class="fact"><span class="k">Сезон</span>${a.season.map(s => ({ summer: "☀️ лето", spring: "🌸 весна", autumn: "🍂 осень", winter: "❄️ зима" }[s] || s)).join(", ")}</div>
-            <div class="fact"><span class="k">Бюджет</span>${budgetIcons(a.budget)} · ${a.price_hint}</div>
+            <div class="fact"><span class="k">Бюджет</span>${budgetIcons(a.budget)} · ${esc(a.price_hint)}</div>
             <div class="fact"><span class="k">Длительность</span>≈ ${a.duration_h} ч</div>
-            <div class="fact"><span class="k">Рейтинг</span><span class="star">★</span> ${a.rating.toFixed(1)} / 5</div>
+            <div class="fact"><span class="k">Рейтинг</span><span class="star" aria-hidden="true">★</span> ${a.rating.toFixed(1)} / 5</div>
           </div>
           <div class="card-chips">${a.tags.map(t => `<span class="chip">${tagLabel(t)}</span>`).join("")}</div>
-          <div class="tip">💡 ${a.tips}</div>
+          <div class="tip">💡 ${esc(a.tips)}</div>
           <div class="modal-actions">
             <a class="btn btn-primary btn-sm" href="${mapUrl}" target="_blank" rel="noopener">🗺 Открыть на карте</a>
             <button class="btn btn-outline btn-sm" id="m-share">🔗 Поделиться</button>
@@ -675,9 +764,16 @@ function openModal(id) {
     </div>`;
   const close = () => {
     $("#modal-root").innerHTML = ""; document.body.style.overflow = "";
-    // Модалка открыта по прямой ссылке #/place/<id> — уходим в каталог.
+    document.removeEventListener("keydown", trapModalTab, true);
+    // Вернуть фокус туда, откуда открыли карточку (клавиатура не теряется).
+    if (_modalLastFocus && document.contains(_modalLastFocus)) _modalLastFocus.focus();
+    _modalLastFocus = null;
+    // Модалка открыта по прямой ссылке #/place/<id> — уходим в каталог,
+    // сохраняя фильтры в URL (адрес остаётся источником правды).
     if (hashParts().path.startsWith("place/")) {
-      history.replaceState(null, "", location.pathname + "#/catalog");
+      const q = CatalogLink.buildCatalogQuery(state.f);
+      history.replaceState(null, "",
+        location.pathname + "#/catalog" + (q ? "?" + q : ""));
     }
   };
   state._closeModal = close;
@@ -691,6 +787,8 @@ function openModal(id) {
   });
   $("#overlay").addEventListener("click", e => { if (e.target.id === "overlay") close(); });
   document.body.style.overflow = "hidden";
+  document.addEventListener("keydown", trapModalTab, true);
+  $("#m-close").focus();  // фокус входит в диалог
 }
 
 /* ---------------- map ---------------- */
@@ -794,9 +892,10 @@ function drawMap() {
     const meta = state.meta.types[a.type] || { emoji: "📍" };
     const color = TYPE_COLORS[a.type] || "#64748b";
     const fav = state.favs.has(a.id) ? ' class="fav-ring"' : "";
-    return `<g class="marker" data-id="${a.id}"
+    return `<g class="marker" data-id="${a.id}" tabindex="0" role="button"
+        aria-label="${esc(a.name)} — открыть карточку"
         transform="translate(${MAP.px(a.lng).toFixed(1)},${MAP.py(a.lat).toFixed(1)})">
-      <title>${a.name} — ${a.region}</title>
+      <title>${esc(a.name)} — ${esc(a.region)}</title>
       <circle${fav} r="14" fill="none" stroke="#e0475b" stroke-width="2" opacity="${state.favs.has(a.id) ? 1 : 0}"/>
       <circle r="11" fill="${color}" stroke="#fff" stroke-width="2"/>
       <text y="4.5" text-anchor="middle" font-size="11" pointer-events="none">${meta.emoji}</text>
@@ -843,21 +942,54 @@ function drawMap() {
     return `<span class="legend-item"><i style="background:${TYPE_COLORS[t] || "#64748b"}"></i>${meta.emoji} ${meta.label}</span>`;
   }).join("") + `<span class="legend-item"><i style="background:transparent;border:2px solid #e0475b;border-radius:50%"></i>❤ избранное</span>`;
 
-  $$(".marker", svg).forEach(g =>
-    g.addEventListener("click", () => openModal(g.dataset.id)));
+  $$(".marker", svg).forEach(g => {
+    g.addEventListener("click", () => openModal(g.dataset.id));
+    g.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openModal(g.dataset.id); }
+    });
+  });
 }
 
 /* ---------------- router / init ---------------- */
+const ROUTE_TITLES = {
+  home: "Главная", catalog: "Каталог мест", map: "Карта Крыма",
+  quiz: "Квиз и план поездки", news: "Новости Крыма",
+};
+
+function announce(text) {
+  const el = $("#route-status");
+  if (el) el.textContent = text;
+}
+
+function hashParts() {
+  const h = location.hash.replace(/^#\/?/, "");
+  const [path, query = ""] = h.split("?");
+  return { path: path || "home", query: new URLSearchParams(query), rawQuery: query };
+}
+
 function route() {
-  const { path, query } = hashParts();
+  const { path, query, rawQuery } = hashParts();
   const navPath = path.startsWith("place/") ? "catalog" : path;
-  $$(".nav a").forEach(a => a.classList.toggle("active", a.dataset.nav === navPath || (navPath === "home" && a.dataset.nav === "home")));
+  $$(".nav a").forEach(a => {
+    const active = a.dataset.nav === navPath;
+    a.classList.toggle("active", active);
+    if (active) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  });
   if (path.startsWith("place/")) {
     // Прямая ссылка на место: каталог фоном + модалка поверх.
-    renderCatalog();
+    // Если каталог уже отрисован — не перерисовываем (не сбрасываем скролл).
+    if (state._lastRoute !== "catalog") renderCatalog();
     openModal(decodeURIComponent(path.slice(6)));
+    state._lastRoute = "catalog";
+    announce(`Карточка места открыта поверх каталога`);
+    return;
   }
-  else if (path === "catalog") renderCatalog();
+  if (path === "catalog") {
+    // URL — источник правды: filters из ссылки побеждают локальные.
+    if (rawQuery) state.f = CatalogLink.parseCatalogQuery(rawQuery);
+    renderCatalog();
+  }
   else if (path === "map") renderMap();
   else if (path === "quiz") {
     if (!state.quizResult && !state.planAutoDone) {
@@ -871,6 +1003,8 @@ function route() {
   }
   else if (path === "news") renderNews();
   else renderHome();
+  state._lastRoute = navPath;
+  announce(ROUTE_TITLES[navPath] || "Крым.Гид");
   window.scrollTo({ top: 0 });
 }
 
@@ -891,6 +1025,14 @@ $("#nav-toggle").addEventListener("click", () => {
   const nav = $(".nav");
   nav.classList.toggle("open");
   $("#nav-toggle").setAttribute("aria-expanded", String(nav.classList.contains("open")));
+});
+
+/* Skip-link: href="#view" не отдаём роутеру (hash не меняется),
+   просто переносим фокус и скролл в <main>. */
+$("#skip-link").addEventListener("click", e => {
+  e.preventDefault();
+  view.focus({ preventScroll: true });
+  view.scrollIntoView();
 });
 
 (async function init() {

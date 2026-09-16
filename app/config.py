@@ -32,4 +32,28 @@ USER_AGENT = (
     "(tourism news aggregator for Crimea; FastAPI + feedparser)"
 )
 
-APP_VERSION = "0.11.0"
+# Публичный origin сайта для Open Graph / Twitter Card (og:url, og:image
+# обязаны быть абсолютными). Пусто — origin выводится из запроса
+# (с учётом X-Forwarded-Proto/Host за reverse-proxy).
+SITE_ORIGIN = os.environ.get("SITE_ORIGIN", "").rstrip("/")
+
+# Content-Security-Policy. Своих inline-скриптов нет (весь JS — файлы),
+# поэтому script-src строго 'self'; inline остаются только style-атрибуты
+# (ширина прогресс-бара и т.п.) — отсюда 'unsafe-inline' у style-src.
+# frame-ancestors ослабляется через env, когда приложение встраивают
+# в iframe (превью, витрины): CSP_FRAME_ANCESTORS="*".
+CSP_FRAME_ANCESTORS = os.environ.get("CSP_FRAME_ANCESTORS", "'self'")
+CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "font-src 'self' data:; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "form-action 'self'; "
+    f"frame-ancestors {CSP_FRAME_ANCESTORS}"
+)
+
+APP_VERSION = "0.12.0"

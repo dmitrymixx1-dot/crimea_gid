@@ -1,5 +1,7 @@
+import re
 import urllib.parse
 
+from app import main
 from app.config import APP_VERSION
 
 
@@ -244,3 +246,77 @@ def test_weather_unknown_city_404(client):
 def test_weather_single_city_filter(client):
     d = client.get("/api/weather?city=yalta").json()
     assert [c["id"] for c in d["cities"]] == ["yalta"]
+
+
+# ---------------- фронт, доступность, безопасность (0.12.0) ----------------
+
+def _csp(client, path="/"):
+    return client.get(path).headers.get("content-security-policy", "")
+
+
+def test_csp_header_on_all_responses(client):
+    for path in ("/", "/api/health", "/static/app.js", "/sw.js"):
+        csp = _csp(client, path)
+        assert "default-src 'self'" in csp, path
+        assert "object-src 'none'" in csp, path
+
+
+def test_csp_scripts_strict_no_unsafe_inline(client):
+    csp = _csp(client)
+    directives = [d.strip() for d in csp.split(";")]
+    script_src = next(d for d in directives if d.startswith("script-src"))
+    assert script_src == "script-src 'self'"
+    style_src = next(d for d in directives if d.startswith("style-src"))
+    assert "'unsafe-inline'" in style_src  # inline остаются только у стилей
+
+
+def test_csp_frame_ancestors_default_self(client):
+    assert "frame-ancestors 'self'" in _csp(client)
+
+
+def test_index_has_open_graph_and_twitter_cards(client):
+    html = client.get("/").text
+    for needle in (
+        'property="og:type" content="website"',
+        'property="og:title"',
+        'property="og:description"',
+        'property="og:image"',
+        'name="twitter:card" content="summary_large_image"',
+        'name="twitter:image"',
+    ):
+        assert needle in html, needle
+
+
+def test_index_og_urls_rendered_absolute(client):
+    html = client.get("/").text
+    assert "__ORIGIN__" not in html
+    meta_re = r'<meta (?:property|name)="(og:[^"]+|twitter:[^"]+)" content="([^"]*)"'
+    og = dict(re.findall(meta_re, html))
+    assert og["og:image"].endswith("/static/img/hero.jpg")
+    assert og["og:image"].startswith("http")
+    assert og["og:url"].startswith("http")
+    assert og["twitter:image"] == og["og:image"]
+
+
+def test_index_og_honours_forwarded_headers(client):
+    html = client.get("/", headers={
+        "X-Forwarded-Proto": "https",
+        "X-Forwarded-Host": "gid.example.ru, proxy.internal",
+    }).text
+    assert 'property="og:url" content="https://gid.example.ru/"' in html
+    assert 'content="https://gid.example.ru/static/img/hero.jpg"' in html
+
+
+def test_index_og_site_origin_env_wins_over_headers(client, monkeypatch):
+    monkeypatch.setattr(main, "SITE_ORIGIN", "https://crimea.gid/")
+    html = client.get("/", headers={"X-Forwarded-Host": "evil.example"}).text
+    assert 'property="og:url" content="https://crimea.gid/"' in html
+
+
+def test_index_a11y_landmarks_and_live_regions(client):
+    html = client.get("/").text
+    assert 'class="skip-link"' in html            # skip-link «к содержимому»
+    assert 'id="toast-root" role="status" aria-live="polite"' in html
+    assert 'id="route-status" class="sr-only" role="status"' in html
+    assert '<nav class="nav" aria-label="Основные разделы">' in html
+    assert '<main id="view" class="wrap" tabindex="-1">' in html

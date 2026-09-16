@@ -5,12 +5,12 @@
 """
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .config import APP_VERSION, STATIC_DIR
+from .config import APP_VERSION, CSP, SITE_ORIGIN, STATIC_DIR
 from .services.load import get_attractions, get_quiz
 from .services.news import news_service
 from .services.recommend import TAGS, TYPE_META, evaluate
@@ -24,6 +24,7 @@ async def security_headers(request, call_next):
     response = await call_next(request)
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Content-Security-Policy", CSP)
     return response
 
 
@@ -136,5 +137,23 @@ async def service_worker():
 
 
 @app.get("/")
-async def index():
-    return FileResponse(STATIC_DIR / "index.html")
+async def index(request: Request):
+    """SPA-каркас. Плейсхолдер `__ORIGIN__` в мета-тегах Open Graph
+    подставляется фактическим origin'ом запроса (или SITE_ORIGIN из env):
+    og:url/og:image обязаны быть абсолютными, а приложение живёт и за
+    reverse-proxy, и на ephemeral-хостах."""
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    if "__ORIGIN__" in html:
+        html = html.replace("__ORIGIN__", site_origin(request))
+    return HTMLResponse(html)
+
+
+def site_origin(request: Request) -> str:
+    """Публичный origin: SITE_ORIGIN из env важнее заголовков запроса."""
+    if SITE_ORIGIN:
+        return SITE_ORIGIN.rstrip("/")
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    proto = proto.split(",")[0].strip()
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    host = host.split(",")[0].strip()
+    return f"{proto}://{host}".rstrip("/")
