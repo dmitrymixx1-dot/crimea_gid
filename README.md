@@ -5,6 +5,10 @@
 точек с координатами, **схема-карта** полуострова, **лента** собирает новости
 из 5 RSS-лент и 3 телеграм-каналов, **погода** — по 13 курортам.
 
+> 📚 **Документация**: [docs/](docs/README.md) —
+> [REST API](docs/api.md) · [архитектура](docs/architecture.md) ·
+> [схемы данных](docs/data.md) · [гид разработчика](docs/development.md)
+
 ## Возможности
 
 - **Квиз (7 вопросов)** — интересы, сезон, темп, бюджет, состав, длительность,
@@ -93,10 +97,14 @@ GitHub Actions (`.github/workflows/ci.yml`) на каждый push и PR:
 .venv/bin/python -m pytest tests/ -q
 ```
 
-Модули: `test_recommends.py` (матчинг, планировщик), `test_news.py`
-(скоринг «Крым», темы, дедупликация, TTL и файл-кэш, офлайн-fallback),
-`test_telegram.py` (парсер t.me/s/), `test_data.py` (схемы данных,
-координаты), `test_api.py` (эндпоинты, фильтры, заголовки).
+**120 тестов**, сеть не используется. Модули: `test_api.py` (эндпоинты,
+фильтры, заголовки, PWA), `test_data.py` (схемы данных, согласованность
+со словарями кода), `test_load.py` (загрузчик JSON), `test_config.py`
+(дефолты, env), `test_recommends.py` (матчинг по факторам, планировщик),
+`test_news.py` (скоринг «Крым», темы, дедупликация, кэши, офлайн),
+`test_telegram.py` (парсер t.me/s/), `test_weather.py` (WMO-коды,
+разбор Open-Meteo, кэш, падение сети). Подробности —
+[docs/development.md](docs/development.md#тесты).
 
 ## API
 
@@ -105,7 +113,9 @@ GitHub Actions (`.github/workflows/ci.yml`) на каждый push и PR:
 | GET | `/api/health` | Живость + версия |
 | GET | `/api/attractions?tag=&area=&q=` | Каталог мест с фильтрами (с lat/lng) |
 | GET | `/api/attractions/{id}` | Одна точка каталога + `type_meta` |
-| GET | `/sw.js` | Service worker (scope `/`) |
+
+Полный справочник со схемами ответов и примерами — [docs/api.md](docs/api.md).
+Служебные: `GET /` (SPA), `GET /static/*`, `GET /sw.js` (service worker, scope `/`).
 | GET | `/api/areas` | Географические районы полуострова |
 | GET | `/api/tags` | Словарь тегов и типов мест |
 | GET | `/api/quiz` | Контент квиза |
@@ -133,7 +143,8 @@ static/
   index.html / style.css / app.js   # SPA (vanilla JS, без сборки)
   sw.js / manifest.webmanifest       # PWA: офлайн-оболочка
   img/                               # hero + категорийные изображения + иконки
-tests/                             # pytest
+docs/                              # документация: API, архитектура, данные, dev-гид
+tests/                             # pytest (120 тестов, без сети)
 .github/workflows/ci.yml           # CI: тесты + JS + docker build
 ```
 
