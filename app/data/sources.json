@@ -54,5 +54,26 @@
     "url": "https://t.me/s/newsru",
     "type": "telegram",
     "description": "Публичное превью телеграм-канала News.ru"
+  },
+  {
+    "id": "riacrim",
+    "name": "РИА Новости Крым",
+    "url": "https://crimea.ria.ru/export/rss2/archive/index.xml",
+    "type": "rss",
+    "description": "Крымская редакция РИА Новости: события полуострова"
+  },
+  {
+    "id": "forpost",
+    "name": "Форпост Севастополь",
+    "url": "https://forpostsevastopol.ru/feed/",
+    "type": "rss",
+    "description": "Новостной портал Севастополя"
+  },
+  {
+    "id": "tg-riacrim",
+    "name": "РИА Новости Крым · TG",
+    "url": "https://t.me/s/rian_crimea",
+    "type": "telegram",
+    "description": "Публичное превью телеграм-канала РИА Новости Крым"
   }
 ]

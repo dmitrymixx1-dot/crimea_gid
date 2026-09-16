@@ -106,7 +106,7 @@ sources.json ──► NewsService.get(force?)
 ```
 WeatherService.get(city?, refresh?)
   │ miss в кэше (WEATHER_TTL, 1 час)
-  ▼ asyncio.gather по 13 городам
+  ▼ asyncio.gather по 18 городам
 Open-Meteo: current (temp/code/wind) + daily ×4 (code/max/min)
   ▼ нормализация: WMO-код → (эмодзи, русская подпись),
     день недели из локальной даты прогноза, округление °C

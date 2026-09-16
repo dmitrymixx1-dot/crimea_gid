@@ -34,7 +34,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 **Ответ 200:**
 
 ```json
-{"ok": true, "name": "Крым.Гид", "version": "0.9.2-beta"}
+{"ok": true, "name": "Крым.Гид", "version": "0.10.0"}
 ```
 
 | Поле | Тип | Описание |
@@ -64,7 +64,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 | Поле | Тип | Описание |
 |---|---|---|
-| `tags` | object | `id тега → русское название` (14 тегов) |
+| `tags` | object | `id тега → русское название` (15 тегов) |
 | `types` | object | `id типа → {emoji, label, img}`; `img` — файл в `/static/img/` |
 
 Список тегов и типов: [data.md](data.md#справочники).
@@ -90,7 +90,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 
 ```json
 {
-  "count": 36,
+  "count": 52,
   "items": [
     {
       "id": "aipetri",
@@ -351,7 +351,7 @@ Referrer-Policy: strict-origin-when-cross-origin
 Погодные коды — WMO (`current.label` — русская подпись; полный словарь —
 `WMO` в `app/services/weather.py`). `online: false` + `available: false`,
 если Open-Meteo недостижим — фронтенд в этом случае прячет виджет.
-Список городов — константа `CITIES` (13 курортов).
+Список городов — константа `CITIES` (18 курортов).
 
 ---
 
