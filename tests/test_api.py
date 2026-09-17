@@ -34,6 +34,17 @@ def test_attractions_catalog(client):
     assert all("name" in a and "tags" in a and "area" in a for a in body["items"])
 
 
+def test_attractions_carry_the_machine_price(client):
+    """`price` — машинная цена входа рядом с человеческой `price_hint`:
+    её читает матч-мейкер, чтобы «дорого» звучало только там, где за вход
+    правда нужно платить больше бюджета."""
+    items = client.get("/api/attractions").json()["items"]
+    assert items
+    for a in items:
+        assert isinstance(a["price"], int) and a["price"] >= 0, a["id"]
+        assert 1 <= a["budget"] <= 3, a["id"]
+
+
 def test_attractions_tag_filter(client):
     body = client.get("/api/attractions?tag=wine").json()
     assert body["count"] >= 3

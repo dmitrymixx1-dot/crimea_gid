@@ -48,7 +48,7 @@ inline-обработчики вида `onerror=` во фронтенде зап
 **Ответ 200:**
 
 ```json
-{"ok": true, "name": "Крым.Гид", "version": "1.10.1"}
+{"ok": true, "name": "Крым.Гид", "version": "1.11.0"}
 ```
 
 | Поле | Тип | Описание |
@@ -164,10 +164,11 @@ inline-обработчики вида `onerror=` во фронтенде зап
       "description": "7-минутный подъём канаткой…",
       "tags": ["view", "active", "photo", "nature"],
       "season": ["spring", "summer", "autumn"],
-      "budget": 2,
+      "budget": 1,
       "duration_h": 4,
-      "rating": 4.8,
-      "price_hint": "канатка ~1200 ₽",
+      "rating": 4.7,
+      "price": 1000,
+      "price_hint": "канатка ~1000 ₽ туда-обратно",
       "tips": "Берите ветровку…",
       "access": "both",
       "lat": 44.45,
@@ -183,7 +184,12 @@ inline-обработчики вида `onerror=` во фронтенде зап
 и парков (19 из 60). У пляжей и природных точек этих полей в ответе нет.
 `hours` — текст для человека, `schedule` — его машинная проекция
 (`[{"months": "4-10", "from": "09:00", "to": "18:00", "closed": ["mon"]}]`),
-по которой фронтенд считает «открыто сейчас».
+по которой фронтенд считает «открыто сейчас». Так же устроена пара
+`price` + `price_hint`: `price` — минимальная цена входа (0 — бесплатно),
+`budget` (1–3) — полоса самой дорогой цены из подсказки; правило и его
+двусторонние тесты — в [data.md](data.md#цена-и-уровень-из-одной-строки).
+`price` решает, когда эконому честно сказать «дороже, чем ваш бюджет»,
+а `budget` = 3 — что за место стоит премиум-впечатление.
 
 ---
 
@@ -198,6 +204,8 @@ inline-обработчики вида `onerror=` во фронтенде зап
 {
   "id": "aipetri",
   "name": "Ай-Петри: канатная дорога и плато",
+  "price": 1000,
+  "budget": 1,
   "…": "…",
   "type_meta": {"emoji": "🌿", "label": "Природа", "img": "cat_nature.jpg"}
 }
@@ -279,7 +287,7 @@ inline-обработчики вида `onerror=` во фронтенде зап
 | `purpose` | string[] | id тегов (неизвестные отбрасываются), макс. 3 | `["beach"]` |
 | `season` | string | `summer` `spring` `autumn` `winter` `any` | `any` |
 | `tempo` | string | `relax` `medium` `active` | `medium` |
-| `budget` | string | `economy` `comfort` `premium` | `comfort` |
+| `budget` | string | `economy` `comfort` `premium`; потолок эконома — 1 000 ₽, комфорта — 3 000 ₽, премиум без потолка (те же числа, что в подсказках квиза) | `comfort` |
 | `party` | string | `solo` `couple` `family` `friends` | `solo` |
 | `duration` | string | `1-2` `3-5` `6-10` `10+` | `3-5` |
 | `transport` | string | `car` `transit` | `car` |

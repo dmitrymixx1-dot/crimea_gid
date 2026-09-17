@@ -1,5 +1,14 @@
 from app.services.load import get_quiz
-from app.services.recommend import PROFILES, _score_attraction, evaluate, plan_itinerary
+from app.services.recommend import (
+    BUDGET_CEILING,
+    PROFILES,
+    REASON_PREMIUM,
+    REASON_TOO_PRICEY,
+    TAGS,
+    _score_attraction,
+    evaluate,
+    plan_itinerary,
+)
 
 
 def _ans(**kw):
@@ -142,21 +151,125 @@ def test_unknown_purpose_tags_are_dropped_and_capped():
     assert r["answers"]["purpose"] == ["beach", "nature", "history"]
 
 
-def test_score_budget_penalty_with_reason():
-    place = {
+def _place(**kw):
+    """Место для проверки баллов: только те поля, на которые смотрит скорер."""
+    base = {
         "id": "p",
         "name": "P",
         "tags": [],
         "season": [],
-        "budget": 3,
+        "budget": 1,
+        "price": 0,
         "duration_h": 3,
-        "rating": 4.5,
+        "rating": 4.0,
         "access": "both",
     }
-    score, reasons = _score_attraction(place, _ans(budget="economy"))
-    assert "Дороже, чем ваш бюджет" in reasons
-    cheap_score, _ = _score_attraction(place, _ans(budget="premium"))
-    assert cheap_score > score  # тот же объект дешевле не станет — разница в баллах
+    base.update(kw)
+    return base
+
+
+def test_score_budget_penalty_with_reason():
+    """Эконом платит за вход: место дороже его потолка — минус и причина."""
+    pricey = _place(budget=2, price=BUDGET_CEILING["economy"] + 500)
+    score, reasons = _score_attraction(pricey, _ans(budget="economy"))
+    assert REASON_TOO_PRICEY in reasons
+    comfort_score, comfort_reasons = _score_attraction(pricey, _ans(budget="comfort"))
+    assert REASON_TOO_PRICEY not in comfort_reasons
+    assert comfort_score > score  # тот же объект дешевле не станет — разница в баллах
+
+
+def test_score_free_place_is_never_too_pricey():
+    """«Бесплатно, но дайвинг за 4 000 ₽» — не повод сказать «дорого»:
+    за вход платить не нужно, а впечатления — дело добровольное."""
+    free = _place(budget=3, price=0)
+    for answer in ("economy", "comfort", "premium"):
+        _, reasons = _score_attraction(free, _ans(budget=answer))
+        assert REASON_TOO_PRICEY not in reasons, answer
+    economy, _ = _score_attraction(free, _ans(budget="economy"))
+    comfort, _ = _score_attraction(free, _ans(budget="comfort"))
+    assert economy == comfort  # вход бесплатный — потолок эконома не задет
+
+
+def test_score_premium_prefers_expensive_experiences():
+    """Премиум — это вкус, а не только снятый запрет: места с дорогими
+    впечатлениями получают плюс и причину, остальные — ничего лишнего."""
+    rich = _place(budget=3, price=0)
+    premium, reasons = _score_attraction(rich, _ans(budget="premium"))
+    comfort, _ = _score_attraction(rich, _ans(budget="comfort"))
+    assert REASON_PREMIUM in reasons
+    assert premium > comfort
+    plain = _place(budget=1, price=0)
+    assert (
+        _score_attraction(plain, _ans(budget="premium"))[0]
+        == _score_attraction(plain, _ans(budget="comfort"))[0]
+    )
+
+
+def test_score_premium_never_mentions_the_ceiling():
+    expensive = _place(budget=3, price=10_000)
+    _, reasons = _score_attraction(expensive, _ans(budget="premium"))
+    assert REASON_TOO_PRICEY not in reasons
+
+
+# ---------------- бюджет как ответ квиза ----------------
+# Правило уровней — в docs/data.md, проверка данных — в test_data.py.
+# Здесь проверяем, что ответ о бюджете что-то значит в подборе: до 1.11.0
+# «премиум» отличался от «комфорта» единственным местом.
+
+
+def _top_ids(purpose: str, budget: str, n: int = 8) -> list[str]:
+    r = evaluate(_ans(purpose=[purpose], budget=budget), [])
+    return [x["id"] for x in r["recommendations"][:n]]
+
+
+def test_budget_answer_changes_the_selection():
+    """Каждый ответ обязан где-то менять подборку — иначе вопрос-обманка."""
+    for left, right in (
+        ("economy", "comfort"),
+        ("comfort", "premium"),
+        ("economy", "premium"),
+    ):
+        assert any(_top_ids(p, left) != _top_ids(p, right) for p in TAGS), (left, right)
+
+
+def test_economy_leads_with_what_it_can_afford():
+    """Первым у эконома идёт место, за вход в которое он заплатит."""
+    ceiling = BUDGET_CEILING["economy"]
+    for p in TAGS:
+        recs = evaluate(_ans(purpose=[p], budget="economy"), [])["recommendations"]
+        assert recs, p
+        assert recs[0]["price"] <= ceiling, p
+
+
+def test_premium_surfaces_the_expensive_experiences():
+    """У премиума наверху — место с дорогими впечатлениями, у эконома таких
+    в начале нет вовсе: ответ меняет не только порядок, но и состав."""
+    premium = evaluate(_ans(purpose=["spa"], budget="premium"), [])["recommendations"]
+    economy = evaluate(_ans(purpose=["spa"], budget="economy"), [])["recommendations"]
+    assert premium[0]["budget"] == 3
+    assert all(x["budget"] < 3 for x in economy[:3])
+
+
+def test_premium_tier_rises_more_often_for_premium():
+    def level3(budget: str) -> int:
+        return sum(
+            1
+            for p in TAGS
+            for x in evaluate(_ans(purpose=[p], budget=budget), [])["recommendations"]
+            if x["budget"] == 3
+        )
+
+    assert level3("premium") > level3("comfort")
+
+
+def test_every_budget_answer_has_something_to_offer():
+    """Как и сезон: ни один ответ не должен приводить к пустому экрану."""
+    for budget in ("economy", "comfort", "premium"):
+        for p in TAGS:
+            assert evaluate(_ans(purpose=[p], budget=budget), [])["count"] >= 3, (
+                budget,
+                p,
+            )
 
 
 def test_score_season_bonus_and_penalty():
