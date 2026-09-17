@@ -73,8 +73,21 @@ function toggleFav(id) {
 /* ---------------- utils ---------------- */
 async function api(url, opts) {
   const res = await fetch(url, opts);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    const err = new Error(`${res.status} ${res.statusText}`);
+    err.status = res.status;
+    // 429 приходит с Retry-After — показываем человеку, сколько ждать,
+    // а не «ошибка 429». Заголовок может не дойти из кэша SW: тогда null.
+    err.retryAfter = RateLimit.parseRetryAfter(res.headers.get("Retry-After"));
+    throw err;
+  }
   return res.json();
+}
+
+/** Текст ошибки запроса: на 429 — человеческое «попробуйте через N». */
+function apiErrorText(e, fallback) {
+  if (e && e.status === 429) return RateLimit.message(e.retryAfter);
+  return fallback;
 }
 
 function toast(msg, ms = 3200) {
@@ -651,7 +664,7 @@ async function submitQuiz() {
     location.hash = "#/quiz";
     renderQuiz();
   } catch (e) {
-    toast("Не удалось посчитать рекомендации");
+    toast(apiErrorText(e, "Не удалось посчитать рекомендации"));
     if (btn) { btn.disabled = false; btn.textContent = "Далее →"; }
   }
 }
@@ -868,7 +881,13 @@ async function renderNews(refresh = false) {
     if (refresh) await loadNews(true);
     else if (!state.news) await loadNews();
   } catch (e) {
-    $("#news-list").innerHTML = `<div class="empty"><div class="big">⚠️</div>Не удалось получить новости: ${e.message}</div>`;
+    // Кнопку «Обновить» возвращаем в рабочий вид: иначе после 429 она
+    // осталась бы мёртвой до перерисовки экрана.
+    state.newsLoading = false;
+    const btn = $("#news-refresh");
+    if (btn) { btn.disabled = false; btn.textContent = "↻ Обновить"; }
+    const text = apiErrorText(e, `Не удалось получить новости: ${e.message}`);
+    $("#news-list").innerHTML = `<div class="empty"><div class="big">⚠️</div>${esc(text)}</div>`;
     return;
   }
   renderNewsBody();

@@ -17,6 +17,13 @@ services:
       NEWS_CACHE_TTL: "${NEWS_CACHE_TTL:-900}"
       WEATHER_TTL: "${WEATHER_TTL:-3600}"
       CSP_FRAME_ANCESTORS: "${CSP_FRAME_ANCESTORS:-'self'}"
+      # Лимиты на дорогие ручки (квиз и refresh=1).
+      RATE_LIMIT_ENABLED: "${RATE_LIMIT_ENABLED:-1}"
+      RATE_LIMIT_QUIZ: "${RATE_LIMIT_QUIZ:-30}"
+      RATE_LIMIT_REFRESH: "${RATE_LIMIT_REFRESH:-6}"
+      # Приложение за своим Caddy: реальный адрес клиента — первый
+      # в X-Forwarded-For, иначе все гости делили бы один лимит на IP прокси.
+      TRUST_PROXY: "${TRUST_PROXY:-1}"
     volumes:
       # Файловый кэш ленты — он переживает рестарт и его же бэкапим.
       - news-cache:/srv/cache

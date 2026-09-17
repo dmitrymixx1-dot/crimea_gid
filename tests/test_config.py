@@ -79,6 +79,52 @@ def test_marine_url_is_open_meteo_marine():
     assert config.MARINE_URL != config.OPEN_METEO_URL
 
 
+def test_rate_limit_defaults(monkeypatch):
+    """Лимиты включены по умолчанию, но «закручены» не в ноль: квиз —
+    в минуту, принудительное обновление — в пять минут (руками жмут
+    кнопку, а не скрипт). Прокси по умолчанию не свой."""
+    import importlib
+
+    for var in (
+        "RATE_LIMIT_ENABLED",
+        "RATE_LIMIT_QUIZ",
+        "RATE_LIMIT_QUIZ_WINDOW",
+        "RATE_LIMIT_REFRESH",
+        "RATE_LIMIT_REFRESH_WINDOW",
+        "RATE_LIMIT_MAX_KEYS",
+        "TRUST_PROXY",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    importlib.reload(config)
+    try:
+        assert config.RATE_LIMIT_ENABLED is True
+        assert config.RATE_LIMIT_QUIZ == 30
+        assert config.RATE_LIMIT_QUIZ_WINDOW == 60
+        assert config.RATE_LIMIT_REFRESH == 6
+        assert config.RATE_LIMIT_REFRESH_WINDOW == 300
+        assert config.RATE_LIMIT_MAX_KEYS > 0
+        assert config.TRUST_PROXY is False
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config)
+
+
+def test_rate_limit_env_override(monkeypatch):
+    import importlib
+
+    monkeypatch.setenv("RATE_LIMIT_ENABLED", "0")
+    monkeypatch.setenv("RATE_LIMIT_QUIZ", "5")
+    monkeypatch.setenv("TRUST_PROXY", "1")
+    importlib.reload(config)
+    try:
+        assert config.RATE_LIMIT_ENABLED is False
+        assert config.RATE_LIMIT_QUIZ == 5
+        assert config.TRUST_PROXY is True
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config)
+
+
 def test_version_is_consistent_everywhere():
     """APP_VERSION — единый источник правды: README, sw.js и docs/api.md
     обязаны называть ту же версию (иначе PWA-кэш и доки врут)."""

@@ -18,6 +18,7 @@ FRONT_FILES = [
     "catalog-link.js",
     "favs-link.js",
     "hourly.js",
+    "rate-limit.js",
     "sw.js",
 ]
 
@@ -481,3 +482,131 @@ def test_leaflet_failure_falls_back_to_svg():
     assert "catch(err" in app  # ошибка загрузки ловится
     assert 'switchMapLayer("svg")' in app  # откат на схему
     assert "Не удалось загрузить интерактивную карту" in app
+
+
+# ---------------- лимиты и автодеплой (фаза 1.6) ----------------
+
+
+def test_rate_limit_module_is_umd_and_wired():
+    """Подписи 429 живут в модуле (как и остальные правила фронта):
+    их можно покрыть тестами, а не держать в разметке."""
+    src = read("rate-limit.js")
+    assert "module.exports" in src and "root.RateLimit" in src
+    assert '"/static/rate-limit.js"' in read("sw.js")
+    assert 'src="/static/rate-limit.js"' in read("index.html")
+    app = read("app.js")
+    # Фронт читает Retry-After сервера, а не выдумывает время ожидания.
+    assert 'res.headers.get("Retry-After")' in app
+    assert "RateLimit.message" in app
+
+
+def test_rate_limit_error_is_shown_instead_of_raw_status():
+    """Квиз и «Обновить» новостей обязаны объяснять 429 по-человечески."""
+    app = read("app.js")
+    assert "apiErrorText" in app
+    block = app[app.index("function submitQuiz") : app.index("const SLOT_META")]
+    assert "apiErrorText" in block
+    # Кнопка «Обновить» после 429 не должна оставаться мёртвой.
+    news_block = app[
+        app.index("async function renderNews") : app.index("function renderNewsBody")
+    ]
+    assert "btn.disabled = false" in news_block
+
+
+def test_compose_trusts_its_own_proxy():
+    """За Caddy адрес соединения — сам прокси: без TRUST_PROXY все гости
+    делили бы один лимит на контейнер."""
+    import yaml
+
+    root = STATIC_DIR.parent
+    compose = yaml.safe_load((root / "docker-compose.yml").read_text("utf-8"))
+    env = compose["services"]["app"]["environment"]
+    # compose сам подставит дефолт из `${VAR:-…}`; нам важно, что ручка
+    # передаётся и что по умолчанию прокси считается своим.
+    assert env["TRUST_PROXY"] == "${TRUST_PROXY:-1}"
+    assert env["RATE_LIMIT_ENABLED"] == "${RATE_LIMIT_ENABLED:-1}"
+    assert "RATE_LIMIT_QUIZ" in env and "RATE_LIMIT_REFRESH" in env
+
+
+def test_env_example_documents_rate_limits():
+    text = (STATIC_DIR.parent / ".env.example").read_text("utf-8")
+    for var in (
+        "RATE_LIMIT_ENABLED",
+        "RATE_LIMIT_QUIZ",
+        "RATE_LIMIT_REFRESH",
+        "TRUST_PROXY",
+    ):
+        assert var in text, f"в .env.example нет {var}"
+
+
+def deploy_workflow():
+    import yaml
+
+    path = STATIC_DIR.parent / ".github" / "workflows" / "deploy.yml"
+    text = path.read_text("utf-8")
+    return yaml.safe_load(text), text
+
+
+def test_deploy_workflow_is_tag_driven_and_keyless():
+    """Выкат — по тегу (или вручную), ключи и хосты — только в секретах."""
+    wf, text = deploy_workflow()
+    triggers = wf.get("on", wf.get(True))
+    assert "v*" in triggers["push"]["tags"], "нет триггера на тег"
+    assert "workflow_dispatch" in triggers
+    for secret in (
+        "DEPLOY_HOST",
+        "DEPLOY_USER",
+        "DEPLOY_PATH",
+        "DEPLOY_SSH_KEY",
+    ):
+        assert f"secrets.{secret}" in text, secret
+    assert "PRIVATE KEY" not in text, "ключ в репозитории быть не должно"
+    assert "password" not in text
+    # Сторонние экшены не тянем: только официальные actions/*.
+    for step in wf["jobs"]["deploy"]["steps"]:
+        uses = step.get("uses", "")
+        if uses:
+            assert uses.startswith("actions/"), uses
+
+
+def test_deploy_workflow_checks_tests_before_ssh():
+    """Не выкатываем тег, который не прошёл тесты: preflight раньше SSH."""
+    steps = deploy_workflow()[0]["jobs"]["deploy"]["steps"]
+    runs = [str(step.get("run", "")) for step in steps]
+    preflight = next(i for i, r in enumerate(runs) if "pytest" in r)
+    ssh = next(i for i, r in enumerate(runs) if "ssh " in r)
+    assert preflight < ssh
+
+
+def test_deploy_workflow_does_not_run_two_deploys_at_once():
+    wf = deploy_workflow()[0]
+    assert wf["concurrency"]["group"] == "deploy"
+    assert wf["concurrency"]["cancel-in-progress"] is False
+
+
+def test_deploy_script_is_executable_and_sane():
+    import os
+    import re
+
+    path = STATIC_DIR.parent / "deploy" / "deploy.sh"
+    assert os.access(path, os.X_OK), "нет бита исполнения"
+    src = path.read_text("utf-8")
+    assert src.startswith("#!/usr/bin/env bash")
+    assert "set -euo pipefail" in src
+    assert "up -d --build" in src
+    assert 'COMPOSE="${COMPOSE:-docker compose}"' in src
+    # Без тега/коммита — падаем, а не обновляем «что вышло».
+    assert re.search(r'\[ -n "\$REF" \] \|\| die', src)
+    assert re.search(r'die "нет каталога приложения', src)
+
+
+def test_deploy_script_waits_for_health_and_version():
+    """Выкат считается успешным, только когда контейнер healthy
+    и отдаёт ожидаемую версию — а не просто «команда выполнилась»."""
+    src = (STATIC_DIR.parent / "deploy" / "deploy.sh").read_text("utf-8")
+    assert "State.Health.Status" in src
+    assert "HEALTH_TIMEOUT" in src
+    assert 'die "не дождались healthy' in src
+    # Версию сверяем с /api/health, а не с файлом на диске.
+    assert "EXPECT_VERSION" in src
+    assert "/api/health" in src
