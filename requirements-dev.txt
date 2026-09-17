@@ -1,0 +1,6 @@
+# Зависимости разработки и CI (в рантайм не попадают — см. requirements.txt).
+-r requirements.txt
+pytest>=8.0
+ruff>=0.6
+# Разбор docker-compose.yml в tests/test_assets.py.
+PyYAML>=6.0

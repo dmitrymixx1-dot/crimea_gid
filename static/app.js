@@ -751,6 +751,7 @@ function openModal(id) {
             <div class="fact"><span class="k">Бюджет</span>${budgetIcons(a.budget)} · ${esc(a.price_hint)}</div>
             <div class="fact"><span class="k">Длительность</span>≈ ${a.duration_h} ч</div>
             <div class="fact"><span class="k">Рейтинг</span><span class="star" aria-hidden="true">★</span> ${a.rating.toFixed(1)} / 5</div>
+            ${a.hours ? `<div class="fact fact-wide"><span class="k">Часы работы</span>🕘 ${esc(a.hours)}</div>` : ""}
           </div>
           <div class="card-chips">${a.tags.map(t => `<span class="chip">${tagLabel(t)}</span>`).join("")}</div>
           <div class="tip">💡 ${esc(a.tips)}</div>

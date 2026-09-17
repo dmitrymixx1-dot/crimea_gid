@@ -1,3 +1,5 @@
+import re
+
 from app.services.load import get_attractions, get_quiz, get_snapshot, get_sources
 from app.services.recommend import (
     AREA_LABEL,
@@ -15,8 +17,8 @@ def test_attractions_have_coordinates():
         assert isinstance(a.get("lat"), (int, float)), a["id"]
         assert isinstance(a.get("lng"), (int, float)), a["id"]
         # Реальные границы полуострова: Тарханкут (32.49) — Керчь (36.47),
-        # Форос (44.39) — Черноморское (45.50).
-        assert 44.3 <= a["lat"] <= 45.7, a["id"]
+        # Форос (44.39) — Бакальская коса (45.75, самая северная точка каталога).
+        assert 44.3 <= a["lat"] <= 45.8, a["id"]
         assert 32.4 <= a["lng"] <= 36.7, a["id"]
 
 
@@ -24,9 +26,12 @@ def test_attractions_schema():
     required = {"id", "name", "type", "region", "area", "description",
                 "tags", "season", "budget", "duration_h", "rating",
                 "price_hint", "tips", "access", "lat", "lng"}
+    optional = {"hours"}
     for a in get_attractions():
         missing = required - set(a)
         assert not missing, f"{a.get('id')}: нет полей {missing}"
+        extra = set(a) - required - optional
+        assert not extra, f"{a['id']}: неизвестные поля {extra}"
         assert a["access"] in ("car", "transit", "both")
         assert 1 <= a["budget"] <= 3
 
@@ -188,12 +193,56 @@ def test_type_meta_images_exist():
 # ---------------- объём каталога и географическая достоверность ----------------
 
 def test_catalog_size_and_area_coverage():
-    """Каталог вырос до 50+ точек, и в каждом районе есть что показать."""
+    """Каталог вырос до 60 точек, и в каждом районе есть что показать."""
     items = get_attractions()
-    assert len(items) >= 50, f"в каталоге {len(items)} мест"
+    assert len(items) >= 60, f"в каталоге {len(items)} мест"
     for area in AREA_LABEL:
         n = sum(1 for a in items if a["area"] == area)
-        assert n >= 5, f"район «{area}»: всего {n} мест"
+        assert n >= 10, f"район «{area}»: всего {n} мест"
+
+
+def test_western_crimea_is_no_longer_the_thin_one():
+    """Фаза 1.0: Западный Крым перестал быть «районом на восемь точек» —
+    добираем до уровня остальных, иначе планировщик не соберёт там день."""
+    items = get_attractions()
+    west = [a for a in items if a["area"] == "Западный"]
+    assert len(west) >= 15, f"Западный Крым: {len(west)} точек"
+    # Планировщик кластеризует день по району: на 3 остановки в день
+    # нужен разнообразный набор типов, а не пять пляжей подряд.
+    assert len({a["type"] for a in west}) >= 5, "Западный Крым однотипен"
+    # Без машины на запад тоже должно быть что предложить.
+    assert sum(1 for a in west if a["access"] in ("transit", "both")) >= 4
+
+
+# ---------------- часы работы ----------------
+
+def test_hours_present_for_ticketed_landmarks():
+    """Часы работы указываем там, где график стабилен и публикуется музеем:
+    дворцы, пещеры, парки. У «природных» точек их быть не должно —
+    честнее отсутствие поля, чем выдуманный график."""
+    items = {a["id"]: a for a in get_attractions()}
+    for pid in ("lastochino", "vorontsov", "livadia", "massandra", "khan",
+                "hersonesus", "nikitsky", "marble", "taygan", "chufut-kale"):
+        assert items[pid].get("hours"), f"{pid}: нет часов работы"
+    assert sum(1 for a in items.values() if a.get("hours")) >= 10
+
+
+def test_hours_look_like_schedules():
+    for a in get_attractions():
+        hours = a.get("hours")
+        if hours is None:
+            continue
+        assert isinstance(hours, str) and hours.strip() == hours, a["id"]
+        assert 5 <= len(hours) <= 200, f"{a['id']}: {len(hours)} символов"
+        # В строке обязано быть время вида 9:00 / 18:00.
+        assert re.search(r"\d{1,2}:\d{2}", hours), f"{a['id']}: {hours}"
+
+
+def test_price_hints_are_informative():
+    """Цена — либо сумма в рублях, либо честное «бесплатно»."""
+    for a in get_attractions():
+        hint = a["price_hint"].lower()
+        assert "₽" in hint or "бесплат" in hint, f"{a['id']}: {a['price_hint']}"
 
 
 # Координаты сверены с OpenStreetMap/Википедией: якоря не дают «уплыть»

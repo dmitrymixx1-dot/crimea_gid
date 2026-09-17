@@ -1,0 +1,42 @@
+# Caddy для «Крым.Гид»: HTTPS, сжатие и проксирование на FastAPI.
+# Сертификат выпускается и продлевается автоматически (ACME), поэтому
+# никаких ключей в репозитории нет — только домен и почта из .env.
+
+{
+	email {$ACME_EMAIL}
+	# Логи в stdout: их собирает `docker compose logs`.
+	log {
+		output stdout
+		format console
+	}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Заголовки безопасности приложение ставит само (CSP, nosniff,
+	# Referrer-Policy). Caddy добавляет только HSTS — он имеет смысл
+	# лишь там, где HTTPS уже терминируется.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	# Статика с хэшируемым содержимым меняется вместе с версией SW,
+	# поэтому кэшируем умеренно и позволяем ревалидацию.
+	@static path /static/*
+	header @static Cache-Control "public, max-age=604800, must-revalidate"
+
+	# Service worker всегда свежий, иначе обновление приложения
+	# застрянет у пользователей со старой оболочкой.
+	@sw path /sw.js
+	header @sw Cache-Control "no-cache"
+
+	reverse_proxy app:8000 {
+		# Приложение собирает og:url из X-Forwarded-*, когда SITE_ORIGIN пуст.
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-Host {host}
+		health_uri /api/health
+		health_interval 30s
+	}
+}

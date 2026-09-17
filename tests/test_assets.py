@@ -128,3 +128,65 @@ def test_sw_shell_covers_umd_modules():
 def test_catalog_link_module_is_umd():
     src = read("catalog-link.js")
     assert "module.exports" in src and "root.CatalogLink" in src
+
+
+# ---------------- деплой-конфигурация (фаза 1.0) ----------------
+
+def test_compose_serves_app_behind_caddy():
+    """docker-compose.yml — прод-схема: приложение наружу не торчит,
+    HTTPS терминирует Caddy, кэш ленты лежит в именованном томе."""
+    import yaml
+    root = STATIC_DIR.parent
+    compose = yaml.safe_load((root / "docker-compose.yml").read_text("utf-8"))
+    app_svc, caddy = compose["services"]["app"], compose["services"]["caddy"]
+    # Приложение доступно только внутри compose-сети.
+    assert "ports" not in app_svc, "app не должен публиковать порт наружу"
+    assert "8000" in app_svc["expose"]
+    assert any("80:80" in p for p in caddy["ports"])
+    assert any("443:443" in p for p in caddy["ports"])
+    # Кэш и сертификаты переживают пересоздание контейнеров.
+    assert {"news-cache", "caddy-data"} <= set(compose["volumes"])
+    assert any("/srv/cache" in v for v in app_svc["volumes"])
+
+
+def test_compose_requires_domain_and_acme_email():
+    """Без домена и почты ACME деплой обязан падать сразу,
+    а не выпускать сертификат на пустую строку."""
+    root = STATIC_DIR.parent
+    compose = (root / "docker-compose.yml").read_text("utf-8")
+    assert "${DOMAIN:?" in compose
+    assert "${ACME_EMAIL:?" in compose
+    env = (root / ".env.example").read_text("utf-8")
+    assert "DOMAIN=" in env and "ACME_EMAIL=" in env
+
+
+def test_caddyfile_proxies_with_forwarded_headers():
+    """og:url собирается из X-Forwarded-*, когда SITE_ORIGIN пуст —
+    прокси обязан их передавать."""
+    caddy = (STATIC_DIR.parent / "deploy" / "Caddyfile").read_text("utf-8")
+    assert "reverse_proxy app:8000" in caddy
+    assert "X-Forwarded-Proto" in caddy and "X-Forwarded-Host" in caddy
+    assert "/api/health" in caddy          # проверка живости бэкенда
+    assert "Strict-Transport-Security" in caddy
+    # Service worker не должен залипать в кэше прокси.
+    assert "/sw.js" in caddy and "no-cache" in caddy
+
+
+def test_env_secrets_are_not_committed():
+    root = STATIC_DIR.parent
+    assert not (root / ".env").exists(), ".env не место в репозитории"
+    assert ".env" in (root / ".gitignore").read_text("utf-8")
+    assert ".env" in (root / ".dockerignore").read_text("utf-8")
+
+
+def test_backup_scripts_are_executable_and_sane():
+    import os
+    deploy = STATIC_DIR.parent / "deploy"
+    for name in ("backup-cache.sh", "restore-cache.sh"):
+        path = deploy / name
+        assert path.exists(), name
+        assert os.access(path, os.X_OK), f"{name}: нет бита исполнения"
+        src = path.read_text("utf-8")
+        assert src.startswith("#!/usr/bin/env bash"), name
+        assert "set -euo pipefail" in src, name
+        assert "/srv/cache" in src, name
