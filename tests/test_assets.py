@@ -181,6 +181,24 @@ def test_news_skips_only_foreign_text():
     assert '<div class="news-item" data-i18n="skip">' not in block
 
 
+def test_news_warns_the_english_reader_about_foreign_headlines():
+    """Чужие заголовки не переводятся — и об этом сказано до чтения.
+
+    Оговорка нужна только английскому экрану: русский читает ленту
+    в оригинале, и предупреждать его не о чем.
+    """
+    app = read("app.js")
+    assert "function foreignHeadlinesNote()" in app
+    block = app[
+        app.index("function foreignHeadlinesNote()") : app.index(
+            "function newsItemHTML"
+        )
+    ]
+    assert 'state.lang !== "en"' in block, "оговорка показывается не только англичанину"
+    assert 't("Заголовки остаются русскими' in block, "строка мимо словаря"
+    assert "${foreignHeadlinesNote()}" in app, "оговорка не вставляется в ленту"
+
+
 def test_catalog_link_module_is_umd():
     src = read("catalog-link.js")
     assert "module.exports" in src and "root.CatalogLink" in src
@@ -569,16 +587,39 @@ def test_frontend_reads_the_budget_instead_of_waiting_for_429():
     assert "coolDown(" in quiz_block
 
 
+def test_frontend_knows_the_client_wide_ceiling():
+    """Общий потолок клиента виден и фронту: кнопка гаснет по нему, а
+    подпись у ленты не обещает обновлений, которые сервер уже не отдаст."""
+    src = read("rate-limit.js")
+    assert "X-RateLimit-Total-Remaining" in src, "модуль не читает потолок"
+    assert "function readCeiling" in src and "CEILING_RULE" in src
+    app = read("app.js")
+    assert "RateLimit.readCeiling(res.headers)" in app
+    assert "state.budgets[RateLimit.CEILING_RULE]" in app
+    hint = app[app.index("function budgetHint()") : app.index("function apiErrorText")]
+    assert "CEILING_RULE" in hint, "подпись ленты не смотрит на потолок"
+
+
 def test_limit_budgets_are_documented_per_route():
     """Бюджеты видно и в докладе (`docs/api.md`), и в `.env.example`:
     настроить лимит, не зная, чей он, нельзя."""
     root = STATIC_DIR.parent
     api = (root / "docs" / "api.md").read_text(encoding="utf-8")
-    for name in ("RATE_LIMIT_NEWS", "RATE_LIMIT_WEATHER", "RATE_LIMIT_SEA"):
+    for name in (
+        "RATE_LIMIT_NEWS",
+        "RATE_LIMIT_WEATHER",
+        "RATE_LIMIT_SEA",
+        "RATE_LIMIT_TOTAL",
+    ):
         assert name in api, f"в docs/api.md нет {name}"
     assert "/api/limits" in api, "ручка со бюджетами не задокументирована"
     readme = (root / "README.md").read_text(encoding="utf-8")
-    for name in ("RATE_LIMIT_NEWS", "RATE_LIMIT_WEATHER", "RATE_LIMIT_SEA"):
+    for name in (
+        "RATE_LIMIT_NEWS",
+        "RATE_LIMIT_WEATHER",
+        "RATE_LIMIT_SEA",
+        "RATE_LIMIT_TOTAL",
+    ):
         assert name in readme, f"в README нет {name}"
 
 
@@ -617,6 +658,10 @@ def test_compose_trusts_its_own_proxy():
         "RATE_LIMIT_WEATHER_WINDOW",
         "RATE_LIMIT_SEA",
         "RATE_LIMIT_SEA_WINDOW",
+        # Общий потолок клиента: без него «по чуть-чуть с каждой ручки»
+        # проходит в контейнере так же свободно, как и в dev.
+        "RATE_LIMIT_TOTAL",
+        "RATE_LIMIT_TOTAL_WINDOW",
     ):
         assert var in env, f"compose не передаёт {var}"
 
@@ -632,6 +677,8 @@ def test_env_example_documents_rate_limits():
         "RATE_LIMIT_WEATHER_WINDOW",
         "RATE_LIMIT_SEA",
         "RATE_LIMIT_SEA_WINDOW",
+        "RATE_LIMIT_TOTAL",
+        "RATE_LIMIT_TOTAL_WINDOW",
         "TRUST_PROXY",
     ):
         assert var in text, f"в .env.example нет {var}"
@@ -711,3 +758,170 @@ def test_deploy_script_waits_for_health_and_version():
     # Версию сверяем с /api/health, а не с файлом на диске.
     assert "EXPECT_VERSION" in src
     assert "/api/health" in src
+
+
+# ---------------- репетиция выката (фаза 1.9) ----------------
+#
+# Живой сервер и секреты GitHub есть не у всех, а сценарий выката обязан
+# быть проверен: иначе deploy.sh «протухает» незаметно и ломается ровно
+# в момент релиза. Репетиция (`deploy.sh --dry-run`) гоняет те же проверки
+# без Docker, без сети и без SSH — и её гоняет CI на каждый push.
+
+
+def deploy_script():
+    return (STATIC_DIR.parent / "deploy" / "deploy.sh").read_text("utf-8")
+
+
+def tool(name):
+    """Полный путь к утилите: ruff не любит запуск по имени (S607),
+    а без bash и git репетицию не потрогать — тогда тест пропускается."""
+    import shutil
+
+    import pytest
+
+    found = shutil.which(name)
+    if found is None:
+        pytest.skip(f"нет {name}")
+    return found
+
+
+def run_rehearsal(ref="HEAD", extra_env=None):
+    """Запустить репетицию по-настоящему: нужны только bash и git."""
+    import os
+    import subprocess
+
+    import pytest
+
+    root = STATIC_DIR.parent
+    bash = tool("bash")
+    tool("git")
+    if not (root / ".git").exists():
+        pytest.skip("тесты запущены вне git-репозитория")
+    env = {**os.environ, "APP_DIR": str(root), "DRY_RUN": "1", **(extra_env or {})}
+    return subprocess.run(  # noqa: S603
+        [bash, "deploy/deploy.sh", "--dry-run", ref],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+
+def test_deploy_script_has_a_rehearsal_mode():
+    src = deploy_script()
+    assert "--dry-run" in src and 'DRY_RUN="${DRY_RUN:-0}"' in src
+    # Репетиция печатает план теми же командами, что исполняет выкат.
+    assert 'plan "$COMPOSE up -d --build"' in src
+    assert "check_repo" in src
+    # Ключ репетиции разбирается до проверки аргументов: порядок не важен.
+    assert src.index("--dry-run|-n") < src.index('[ -n "$REF" ] || die')
+
+
+def test_deploy_rehearsal_passes_without_docker_or_network():
+    result = run_rehearsal()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "репетиция" in result.stdout
+    assert "up -d --build" in result.stdout, "план выката не напечатан"
+
+
+def test_deploy_rehearsal_does_not_touch_the_working_tree():
+    """Репетиция — не выкат: рабочее дерево и HEAD остаются на месте."""
+    import subprocess
+
+    git = tool("git")
+
+    def head():
+        return subprocess.run(  # noqa: S603
+            [git, "rev-parse", "HEAD"],
+            cwd=STATIC_DIR.parent,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    before = head()
+    assert run_rehearsal().returncode == 0
+    assert before == head(), "репетиция переключила HEAD"
+
+
+def test_deploy_rehearsal_refuses_an_unknown_ref():
+    result = run_rehearsal("v99.99.99")
+    assert result.returncode != 0
+    assert "не найден" in result.stderr
+
+
+def test_deploy_rehearsal_checks_the_version_of_the_tag():
+    """Тег обязан указывать на коммит с той же версией в коде: иначе выкат
+    «пройдёт», а на сервере окажется другой релиз. Проверяется до сборки.
+
+    Ожидание берём из того же источника, что и скрипт (`git show <ref>`), —
+    иначе тест ломался бы на неподкоммиченном бампе версии.
+    """
+    import subprocess
+
+    git = tool("git")
+    declared = subprocess.run(  # noqa: S603
+        [git, "show", "HEAD:app/config.py"],
+        cwd=STATIC_DIR.parent,
+        capture_output=True,
+        text=True,
+    ).stdout
+    version = re.search(r'^APP_VERSION = "([^"]+)"$', declared, re.M)
+    assert version, "в HEAD не нашлось APP_VERSION"
+
+    ok = run_rehearsal(extra_env={"EXPECT_VERSION": version.group(1)})
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    assert f"версия в исходниках: {version.group(1)}" in ok.stdout
+
+    mismatch = run_rehearsal(extra_env={"EXPECT_VERSION": "0.0.1"})
+    assert mismatch.returncode != 0
+    assert "ожидали «0.0.1»" in mismatch.stderr
+    assert "план" not in mismatch.stdout, "на расхождении версий плана нет"
+
+
+def test_deploy_rehearsal_rejects_a_broken_script():
+    """Проверка синтаксиса — часть репетиции: опечатка в deploy-скрипте
+    обязана ловиться здесь, а не на сервере посреди выката."""
+    assert "bash -n" in deploy_script()
+    src = (STATIC_DIR.parent / "deploy" / "backup-cache.sh").read_text("utf-8")
+    assert "set -" in src, "скрипты деплоя пишутся под set -e"
+
+
+def test_deploy_workflow_can_rehearse_without_secrets():
+    """До живого сервера workflow проверяется репетицией: тесты релиза,
+    секреты (предупреждением, а не падением) и план выката — без SSH."""
+    wf, text = deploy_workflow()
+    triggers = wf.get("on", wf.get(True))
+    assert "dry_run" in triggers["workflow_dispatch"]["inputs"]
+    assert "DRY_RUN=1" in text
+
+    steps = wf["jobs"]["deploy"]["steps"]
+    runs = [str(step.get("run", "")) for step in steps]
+    rehearsal = next(i for i, r in enumerate(runs) if "DRY_RUN=1" in r)
+    ssh = next(i for i, r in enumerate(runs) if "ssh -i" in r)
+    assert rehearsal < ssh, "репетиция обязана идти до выката"
+
+    # Ни один SSH-шаг в репетиции не выполняется.
+    for step in steps:
+        if "ssh " in str(step.get("run", "")):
+            assert "dry_run" in str(step.get("if", "")), step.get("name")
+    # Секреты в репетиции не обязательны: их отсутствие — предупреждение.
+    secrets_step = next(s for s in steps if s.get("name") == "Проверить секреты деплоя")
+    assert "warning" in secrets_step["run"] and "exit 0" in secrets_step["run"]
+
+
+def test_deploy_preflight_matches_ci():
+    """Префлайт выката гоняет те же проверки, что и CI: релиз, который
+    не прошёл форматирование или рассинхрон словаря, на сервер не едет."""
+    steps = deploy_workflow()[0]["jobs"]["deploy"]["steps"]
+    preflight = next(str(s["run"]) for s in steps if "pytest" in str(s.get("run", "")))
+    for check in ("ruff check", "ruff format --check", "pytest", "node --test"):
+        assert check in preflight, f"в префлайте нет {check}"
+    assert "build.py --check" in preflight, "релиз не сверяет словарь локализации"
+
+
+def test_ci_rehearses_the_deploy_script():
+    """Сценарий выката гоняется на каждый push — deploy.sh не может
+    «протухнуть» незаметно до первого выката."""
+    ci = (STATIC_DIR.parent / ".github" / "workflows" / "ci.yml").read_text("utf-8")
+    assert "DRY_RUN=1" in ci and "deploy/deploy.sh" in ci
+    assert "bash -n" in ci

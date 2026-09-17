@@ -267,6 +267,36 @@ def test_reasons_are_translatable(bundle):
         assert ui.get(phrase), f"нет перевода для {phrase!r}"
 
 
+def test_source_badges_are_translatable(bundle):
+    """Вывески изданий приходят из данных, а печатает их бейдж новости.
+
+    Английский экран без перевода оставил бы «РБК» и «Крым.Цифровой»
+    кириллицей посреди переведённой ленты — ровно та «половина экрана»,
+    из-за которой покрытие локали сделано тестом.
+    """
+    data = ROOT / "app" / "data"
+    sources = json.loads((data / "sources.json").read_text("utf-8"))
+    snapshot = json.loads((data / "news_snapshot.json").read_text("utf-8"))
+    names = {s["name"] for s in sources} | {i["source"] for i in snapshot["items"]}
+    ui = {**bundle["labels"], **bundle["ui"]}
+    translated = []
+    for name in sorted(names):
+        if not re.search(r"[а-яёА-ЯЁ]", name):
+            continue  # латинскую вывеску («News.ru») переводить нечего
+        assert name in ui, f"вывеска {name!r} не переведена"
+        assert not re.search(r"[а-яё]", ui[name]), f"в переводе {name!r} кириллица"
+        translated.append(name)
+    assert len(translated) >= 5, f"вывесок подозрительно мало: {translated}"
+
+    # Покрытие держит инструмент: новые источники попадают в список ключей
+    # сами, без правки теста.
+    sys.path.insert(0, str(ROOT / "tools"))
+    import i18n_extract  # noqa: PLC0415
+
+    assert {"РБК", "Крым.Цифровой"} <= i18n_extract.source_labels()
+    assert "News.ru" not in i18n_extract.source_labels(), "латиница не ключ"
+
+
 def test_module_labels_are_present(bundle):
     """Подписи модулей фронта: их не видит статический сбор ключей.
 

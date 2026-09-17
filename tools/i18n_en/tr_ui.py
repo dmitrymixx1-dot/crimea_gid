@@ -206,6 +206,11 @@ UI = {
     "Все темы": "All topics",
     "Ничего не нашлось по запросу.": "Nothing found for this query.",
     "По этой теме пока пусто.": "This topic is empty for now.",
+    # Оговорка только для английского экрана: чужие заголовки не переводятся.
+    "Заголовки остаются русскими: чужие тексты мы не переводим, ссылка ведёт на источник.": (
+        "Headlines stay in Russian: we do not translate other publications' text —"
+        " the link goes to the original."
+    ),
     # --- модалка ---
     "☀️ лето": "☀️ summer",
     "🌸 весна": "🌸 spring",
@@ -489,6 +494,9 @@ EXTRA_LABELS = {
     "РИА Новости Крым": "RIA Novosti Crimea",
     "РИА Новости Крым · TG": "RIA Novosti Crimea · TG",
     "Форпост Севастополь": "Fortpost Sevastopol",
+    "РБК": "RBC",
+    "РБК · TG": "RBC · TG",
+    "Крым.Цифровой": "Crimea.Digital",
     "🚗 На машине можно заехать в самые удалённые точки — смело включайте в маршрут пещеры, мысы и узкие горные дороги.": "🚗 By car you can reach even the most remote spots — put caves, capes and narrow mountain roads in the route without hesitation.",
     "🚌 Без машины ориентируйтесь на курортные города с разветвлённой сетью транспорта.": "🚌 Without a car, lean on resort towns with a wide transport network and keep the far-out places for a day with a driver.",
     # Голова причины: список тем фронт переводит поэлементно (tReason).

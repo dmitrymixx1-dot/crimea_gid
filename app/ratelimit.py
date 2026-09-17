@@ -16,6 +16,13 @@
 по-разному, и общее число на всех заставляло равняться на самую дорогую.
 Сколько запросов пустили и сколько отбили — видно в `stats()`
 и в `GET /api/limits`: настраивать бюджет вслепую нельзя.
+
+Поверх раздельных бюджетов лежит **общий бюджет клиента** (`total_rule()`):
+ручка защищена своим окном, а процесс — нет, и клиент, который берёт
+«по чуть-чуть» с каждой ручки, в сумме нагружает сервер заметно. Один
+запрос считается в обоих счётчиках сразу (`reserve()`), и решение
+принимает самый тесный из них: отказ общего бюджета не съедает слот ручки,
+потому что запрос в этом случае не проходит вовсе.
 """
 
 from __future__ import annotations
@@ -23,6 +30,7 @@ from __future__ import annotations
 import math
 import time
 from collections import deque
+from collections.abc import Collection
 from dataclasses import dataclass
 
 from . import config
@@ -36,6 +44,14 @@ HEADER_RETRY_AFTER = "Retry-After"
 # Имя правила: у каждой ручки свой бюджет, и клиенту нужно знать, чей он
 # прочитал (иначе остаток лимита квиза лёг бы на кнопку «Обновить» ленты).
 HEADER_RULE = "X-RateLimit-Rule"
+# Общий бюджет клиента: он один на все ручки, поэтому живёт в своих
+# заголовках — иначе «остаток» ленты и потолка процесса смешались бы.
+HEADER_TOTAL_LIMIT = "X-RateLimit-Total-Limit"
+HEADER_TOTAL_REMAINING = "X-RateLimit-Total-Remaining"
+HEADER_TOTAL_RESET = "X-RateLimit-Total-Reset"
+# Имя общего счётчика: он не привязан к ручке, поэтому и в `stats()`,
+# и в `X-RateLimit-Rule` (когда отказал именно он) виден отдельно.
+TOTAL = "total"
 
 # Что считаем «правдой» в refresh: то же, что понимает FastAPI.
 _TRUTHY = {"1", "true", "yes", "on"}
@@ -73,11 +89,41 @@ class Rule:
 
 
 @dataclass(frozen=True)
+class Budget:
+    """Один счётчик: ключ, лимит и окно.
+
+    Запрос может стоить сразу в нескольких (`check_rule()` — ручка плюс
+    общий потолок клиента), поэтому `reserve()` принимает список бюджетов
+    и решает по самому тесному.
+    """
+
+    key: str
+    limit: int
+    window: float
+
+    @property
+    def rule(self) -> str:
+        """Имя правила из префикса ключа (`news:203.0.113.7` → `news`)."""
+        return self.key.split(":", 1)[0]
+
+    @property
+    def enabled(self) -> bool:
+        """`limit <= 0` или `window <= 0` — счётчик выключен значением."""
+        return self.limit > 0 and self.window > 0
+
+
+@dataclass(frozen=True)
 class Decision:
     """Результат проверки: пустить запрос или нет.
 
     `retry_after` — секунд до освобождения слота (0, если пустили);
-    `reset` — секунд до полного очищения окна.
+    `reset` — секунд до полного очищения окна; `window` — длина окна
+    (по ней строка отказа в логе называет бюджет целиком).
+
+    Когда запрос считался в нескольких бюджетах сразу (`reserve`),
+    `allowed` — общий исход запроса, а `retry_after > 0` стоит только
+    у того бюджета, который и стал причиной отказа: по нему
+    `Verdict.binding` понимает, чьи числа показывать клиенту.
     """
 
     allowed: bool
@@ -88,6 +134,44 @@ class Decision:
     # Имя правила, к которому относится бюджет; пусто — у решения нет
     # правила (например, собранное вручную в тестах).
     rule: str = ""
+    # Длина окна в секундах: она нужна строке отказа в логе (по ней
+    # оператор понимает, какое именно окно закрылось).
+    window: int = 0
+
+
+@dataclass(frozen=True)
+class Verdict:
+    """Итог по одному запросу: бюджет ручки плюс общий потолок клиента.
+
+    Общий потолок может быть выключен значением — тогда `total` пуст,
+    и заголовки про него не появляются.
+    """
+
+    rule: Decision
+    total: Decision | None = None
+
+    @property
+    def allowed(self) -> bool:
+        return self.rule.allowed
+
+    @property
+    def refused(self) -> list[Decision]:
+        """Бюджеты, которые отказали сами (у них и стоит `retry_after`)."""
+        return [d for d in (self.rule, self.total) if d is not None and d.retry_after]
+
+    @property
+    def binding(self) -> Decision:
+        """Чей бюджет показывать в основных заголовках.
+
+        На успехе — бюджет ручки (клиенту интересен остаток своей ручки,
+        а не общий потолок). На отказе — тот, кто держит дольше всех:
+        `Retry-After` обязан покрывать каждый отказ, иначе клиент
+        вернулся бы ровно за следующим `429`.
+        """
+        refused = self.refused
+        if not refused:
+            return self.rule
+        return max(refused, key=lambda d: d.retry_after)
 
 
 class RateLimiter:
@@ -105,7 +189,8 @@ class RateLimiter:
         self._stats: dict[str, dict[str, int]] = {}
 
     def check(self, key: str, limit: int, window: float) -> Decision:
-        """Учесть запрос и вернуть решение.
+        """Учесть запрос в одном бюджете и вернуть решение (частный случай
+        `reserve`).
 
         `limit <= 0` или `window <= 0` — лимит выключен значением:
         пускаем всех, но честно сообщаем лимит в заголовках.
@@ -113,33 +198,84 @@ class RateLimiter:
         Ключ обязан начинаться с имени правила (`news:203.0.113.7`) —
         по этому префиксу ведутся счётчики нагрузки.
         """
-        rule = key.split(":", 1)[0]
+        return self.reserve([Budget(key, limit, window)])[0]
+
+    def reserve(self, budgets: list[Budget]) -> list[Decision]:
+        """Учесть один запрос сразу в нескольких бюджетах.
+
+        Так работает общий потолок клиента: запрос стоит и в окне ручки,
+        и в окне клиента. Решение одно на все — если хоть один бюджет
+        отказал, запрос не проходит, и **ни один** счётчик не тратится:
+        иначе отказ общего потолка съедал бы слот ручки, а данных клиент
+        не получил бы. `retry_after` стоит только у бюджета, который и
+        стал причиной отказа: ждать открытия чужого окна смысла нет, по
+        нему же middleware понимает, чей бюджет показывать в заголовках.
+
+        Счётчики нагрузки: пущенный запрос пишут всем участникам, отказ —
+        только тому бюджету, который отказал (иначе `denied` у ленты
+        объяснял бы оператору чужой потолок).
+
+        Порядок результата — порядок бюджетов на входе.
+        """
         now = self._now()
-        if limit <= 0 or window <= 0:
-            self._count(rule, allowed=True)
-            return Decision(True, max(limit, 0), max(limit, 0), 0, 0, rule=rule)
+        # `hits is None` — бюджет выключен значением: счётчика у него нет.
+        states: list[tuple[int, Budget, deque[float] | None, bool]] = []
+        for index, budget in enumerate(budgets):
+            if not budget.enabled:
+                states.append((index, budget, None, True))
+                continue
+            hits = self._hits.setdefault(budget.key, deque())
+            while hits and now - hits[0] >= budget.window:
+                hits.popleft()
+            self._seen[budget.key] = now
+            states.append((index, budget, hits, len(hits) < budget.limit))
 
-        hits = self._hits.setdefault(key, deque())
-        while hits and now - hits[0] >= window:
-            hits.popleft()
-        self._seen[key] = now
+        passed = all(own for _, _, _, own in states)
+        if passed:
+            for _, _, hits, _ in states:
+                if hits is not None:
+                    hits.append(now)
 
-        allowed = len(hits) < limit
-        if allowed:
-            hits.append(now)
-        self._count(rule, allowed)
-        reset = (
-            max(1, math.ceil(window - (now - hits[0]))) if hits else max(1, int(window))
+        decisions: list[Decision | None] = [None] * len(budgets)
+        for index, budget, hits, own in states:
+            if hits is None:
+                # Выключенный бюджет запрос не ограничивает, но и в нагрузку
+                # пишется, только если запрос действительно прошёл.
+                if passed:
+                    self._count(budget.rule, allowed=True)
+                decisions[index] = Decision(
+                    allowed=passed,
+                    limit=max(budget.limit, 0),
+                    remaining=max(budget.limit, 0),
+                    retry_after=0,
+                    reset=0,
+                    rule=budget.rule,
+                    window=max(int(budget.window), 0),
+                )
+                continue
+            reset = (
+                max(1, math.ceil(budget.window - (now - hits[0])))
+                if hits
+                else max(1, int(budget.window))
+            )
+            if passed:
+                self._count(budget.rule, allowed=True)
+            elif not own:
+                self._count(budget.rule, allowed=False)
+            decisions[index] = Decision(
+                allowed=passed,
+                limit=budget.limit,
+                remaining=max(0, budget.limit - len(hits)),
+                retry_after=0 if passed or own else reset,
+                reset=reset,
+                rule=budget.rule,
+                window=int(budget.window),
+            )
+
+        self._evict(
+            now, keep=[budget.key for _, budget, hits, _ in states if hits is not None]
         )
-        self._evict(now, keep=key)
-        return Decision(
-            allowed=allowed,
-            limit=limit,
-            remaining=max(0, limit - len(hits)),
-            retry_after=0 if allowed else reset,
-            reset=reset,
-            rule=rule,
-        )
+        return [decision for decision in decisions if decision is not None]
 
     def stats(self) -> dict[str, dict[str, int]]:
         """Сколько запросов к каждой ручке пустили и сколько отбили.
@@ -159,16 +295,28 @@ class RateLimiter:
         self._seen.clear()
         self._stats.clear()
 
+    def clients(self) -> int:
+        """Сколько разных клиентов сейчас в памяти лимитера.
+
+        Ключей больше, чем клиентов: на одного приходится по счётчику на
+        каждую тронутую ручку плюс общий потолок. Наружу
+        (`GET /api/limits`) идёт число клиентов — сами адреса не отдаём,
+        считаем только разные хвосты ключей.
+        """
+        return len({key.split(":", 1)[1] for key in self._hits if ":" in key})
+
     def __len__(self) -> int:
+        """Сколько счётчиков в памяти: ими ограничен `RATE_LIMIT_MAX_KEYS`."""
         return len(self._hits)
 
     def _count(self, rule: str, allowed: bool) -> None:
         entry = self._stats.setdefault(rule, {"allowed": 0, "denied": 0})
         entry["allowed" if allowed else "denied"] += 1
 
-    def _evict(self, now: float, keep: str) -> None:
-        """Держать не больше `max_keys` клиентов: сначала выбрасываем
-        опустевшие окна, потом — самых давних."""
+    def _evict(self, now: float, keep: Collection[str]) -> None:
+        """Держать не больше `max_keys` счётчиков: сначала выбрасываем
+        опустевшие окна, потом — самых давних. `keep` — ключи текущего
+        запроса (их несколько, когда работает общий потолок клиента)."""
         if len(self._hits) <= self._max_keys:
             return
         for key in [k for k, h in self._hits.items() if not h]:
@@ -178,7 +326,7 @@ class RateLimiter:
             return
         oldest = sorted(self._seen.items(), key=lambda kv: kv[1])
         for key, _ in oldest[:overflow]:
-            if key != keep:
+            if key not in keep:
                 self._drop(key)
 
     def _drop(self, key: str) -> None:
@@ -259,6 +407,27 @@ def rules() -> list[Rule]:
     ]
 
 
+def total_rule() -> Rule | None:
+    """Общий бюджет клиента поверх бюджетов ручек.
+
+    От правила ручки он отличается тем, что не привязан к маршруту
+    (`method`/`path` — «любые»): в `match_rule()` это правило не
+    участвует, иначе лимитировался бы весь сайт вместе с каталогом
+    и статикой. `None` — потолок выключен значением (`RATE_LIMIT_TOTAL=0`),
+    и тогда остаются только бюджеты ручек.
+    """
+    if config.RATE_LIMIT_TOTAL <= 0 or config.RATE_LIMIT_TOTAL_WINDOW <= 0:
+        return None
+    return Rule(
+        name=TOTAL,
+        method="*",
+        path="*",
+        limit=config.RATE_LIMIT_TOTAL,
+        window=config.RATE_LIMIT_TOTAL_WINDOW,
+        hint="потолок на клиента поверх бюджетов ручек: все дорогие запросы",
+    )
+
+
 def match_rule(request) -> Rule | None:
     """Правило для запроса или `None`, если ручка не лимитируется."""
     path = request.url.path
@@ -271,11 +440,27 @@ def match_rule(request) -> Rule | None:
     return None
 
 
+def check_rule(rule: Rule, ip: str) -> Verdict:
+    """Учесть запрос в бюджете ручки и в общем потолке клиента.
+
+    Раздельные окна защищают ручку, но не процесс: «по чуть-чуть» с каждой
+    ручки в сумме даёт заметную нагрузку. Поэтому один запрос стоит в двух
+    счётчиках сразу, а проходит только если место есть в обоих.
+    """
+    budgets = [Budget(f"{rule.name}:{ip}", rule.limit, rule.window)]
+    total = total_rule()
+    if total is not None:
+        budgets.append(Budget(f"{total.name}:{ip}", total.limit, total.window))
+    decisions = limiter.reserve(budgets)
+    return Verdict(rule=decisions[0], total=decisions[1] if total else None)
+
+
 def headers(decision: Decision) -> dict[str, str]:
     """Заголовки лимита: их видно и на успехе, и на 429.
 
     `X-RateLimit-Rule` называет бюджет, к которому относятся числа, —
-    без него клиент не отличил бы остаток ленты от остатка квиза.
+    без него клиент не отличил бы остаток ленты от остатка квиза
+    (или от общего потолка клиента, когда отказал он).
     """
     out = {
         HEADER_LIMIT: str(decision.limit),
@@ -285,6 +470,21 @@ def headers(decision: Decision) -> dict[str, str]:
     if decision.rule:
         out[HEADER_RULE] = decision.rule
     return out
+
+
+def total_headers(total: Decision | None) -> dict[str, str]:
+    """Заголовки общего потолка клиента (пусто, если он выключен).
+
+    Отдельные имена — не замена основным: у ручки и у потолка разные
+    окна, и смешать их в одной тройке чисел значит соврать клиенту.
+    """
+    if total is None or total.limit <= 0:
+        return {}
+    return {
+        HEADER_TOTAL_LIMIT: str(total.limit),
+        HEADER_TOTAL_REMAINING: str(total.remaining),
+        HEADER_TOTAL_RESET: str(total.reset),
+    }
 
 
 def detail(retry_after: int) -> str:

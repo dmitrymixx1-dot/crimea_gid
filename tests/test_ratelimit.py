@@ -216,6 +216,200 @@ def test_detail_text_is_human():
     assert ratelimit.detail(120) == "слишком часто: попробуйте через 2 мин"
 
 
+# ---------------- общий потолок клиента (reserve) ----------------
+
+
+def test_reserve_spends_every_budget_of_the_request():
+    """Один запрос стоит и в окне ручки, и в окне клиента."""
+    limiter = ratelimit.RateLimiter(now=Clock())
+    rule, total = limiter.reserve(
+        [
+            ratelimit.Budget("news:1.1.1.1", 3, 60),
+            ratelimit.Budget("total:1.1.1.1", 5, 600),
+        ]
+    )
+    assert rule.allowed and total.allowed
+    assert rule.remaining == 2
+    assert total.remaining == 4
+    assert limiter.stats() == {
+        "news": {"allowed": 1, "denied": 0},
+        "total": {"allowed": 1, "denied": 0},
+    }
+
+
+def test_reserve_keeps_the_order_of_budgets():
+    """Результат — по порядку входа: middleware знает, где ручка, а где потолок."""
+    limiter = ratelimit.RateLimiter(now=Clock())
+    news, total = limiter.reserve(
+        [
+            ratelimit.Budget("news:1.1.1.1", 3, 60),
+            ratelimit.Budget("total:1.1.1.1", 5, 600),
+        ]
+    )
+    assert (news.rule, total.rule) == ("news", "total")
+    swapped = limiter.reserve(
+        [
+            ratelimit.Budget("total:1.1.1.1", 5, 600),
+            ratelimit.Budget("news:1.1.1.1", 3, 60),
+        ]
+    )
+    assert [d.rule for d in swapped] == ["total", "news"]
+
+
+def test_reserve_refuses_when_the_ceiling_is_reached():
+    """Потолок клиента теснее бюджета ручки: запрос не проходит, но слот
+    ручки не тратится — данных клиент всё равно не получил."""
+    limiter = ratelimit.RateLimiter(now=Clock())
+    budgets = [
+        ratelimit.Budget("news:1.1.1.1", 5, 60),
+        ratelimit.Budget("total:1.1.1.1", 2, 600),
+    ]
+    assert all(d.allowed for d in limiter.reserve(budgets))
+    assert all(d.allowed for d in limiter.reserve(budgets))
+    rule, total = limiter.reserve(budgets)
+    assert not rule.allowed and not total.allowed
+    # Ждать предлагают ровно потолок: у него одного стоит retry_after.
+    assert rule.retry_after == 0
+    assert total.retry_after > 0
+    assert rule.remaining == 3, "отказ потолка не съел слот ручки"
+    assert total.remaining == 0
+    # В нагрузку отказ пишет тот, кто отбил; ручка здесь ни при чём.
+    assert limiter.stats() == {
+        "news": {"allowed": 2, "denied": 0},
+        "total": {"allowed": 2, "denied": 1},
+    }
+
+
+def test_reserve_waits_for_the_window_to_slide():
+    clock = Clock()
+    limiter = ratelimit.RateLimiter(now=clock)
+    budgets = [
+        ratelimit.Budget("news:1.1.1.1", 5, 60),
+        ratelimit.Budget("total:1.1.1.1", 1, 600),
+    ]
+    assert limiter.reserve(budgets)[0].allowed
+    assert not limiter.reserve(budgets)[1].allowed
+    clock.tick(601)
+    assert limiter.reserve(budgets)[1].allowed, "окно потолка открылось"
+
+
+def test_reserve_skips_budgets_switched_off_by_value():
+    limiter = ratelimit.RateLimiter(now=Clock())
+    off, on = limiter.reserve(
+        [
+            ratelimit.Budget("news:1.1.1.1", 0, 60),
+            ratelimit.Budget("total:1.1.1.1", 1, 600),
+        ]
+    )
+    assert off.allowed and off.remaining == 0
+    assert on.allowed
+    assert len(limiter) == 1, "выключенный бюджет не заводит счётчик"
+
+
+def test_reserve_does_not_credit_a_refused_request_to_a_switched_off_budget():
+    """Ручка выключена значением, а потолок отказал: запрос не прошёл,
+    значит и в нагрузку ручки он не пишется."""
+    limiter = ratelimit.RateLimiter(now=Clock())
+    budgets = [
+        ratelimit.Budget("news:1.1.1.1", 0, 60),
+        ratelimit.Budget("total:1.1.1.1", 1, 600),
+    ]
+    assert limiter.reserve(budgets)[0].allowed
+    off, total = limiter.reserve(budgets)
+    assert not off.allowed and not total.allowed
+    assert limiter.stats() == {
+        "news": {"allowed": 1, "denied": 0},
+        "total": {"allowed": 1, "denied": 1},
+    }
+
+
+def test_clients_counts_people_not_counters():
+    limiter = ratelimit.RateLimiter(now=Clock())
+    limiter.reserve(
+        [
+            ratelimit.Budget("news:1.1.1.1", 5, 60),
+            ratelimit.Budget("total:1.1.1.1", 9, 600),
+        ]
+    )
+    limiter.check("quiz:2.2.2.2", 5, 60)
+    assert limiter.clients() == 2
+    assert len(limiter) == 3
+
+
+def test_eviction_keeps_both_counters_of_the_request():
+    """Вытеснение не должно обнулять ни ручку, ни потолок текущего запроса."""
+    limiter = ratelimit.RateLimiter(now=Clock(), max_keys=2)
+    limiter.check("quiz:10.0.0.1", 5, 60)
+    rule, total = limiter.reserve(
+        [
+            ratelimit.Budget("news:10.0.0.2", 5, 60),
+            ratelimit.Budget("total:10.0.0.2", 5, 600),
+        ]
+    )
+    assert rule.allowed and total.allowed
+    assert rule.remaining == 4 and total.remaining == 4
+
+
+def test_total_rule_reads_config_at_call_time(monkeypatch):
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL", 7)
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL_WINDOW", 42)
+    total = ratelimit.total_rule()
+    assert (total.name, total.limit, total.window) == ("total", 7, 42)
+    assert total.hint, "без подсказки бюджет не объяснить оператору"
+
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL", 0)
+    assert ratelimit.total_rule() is None, "ноль выключает потолок"
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL", 7)
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL_WINDOW", 0)
+    assert ratelimit.total_rule() is None, "нулевое окно выключает потолок"
+
+
+def test_total_rule_is_not_a_route_rule():
+    """Потолок не привязан к маршруту: в `rules()` его нет, иначе
+    `match_rule` лимитировал бы весь сайт вместе с каталогом и статикой."""
+    assert all(rule.name != ratelimit.TOTAL for rule in ratelimit.rules())
+    assert ratelimit.match_rule(FakeRequest(path="/api/attractions")) is None
+
+
+def test_verdict_binding_is_the_handle_on_success():
+    verdict = ratelimit.Verdict(
+        rule=ratelimit.Decision(True, 6, 5, 0, 300, rule="news", window=300),
+        total=ratelimit.Decision(True, 120, 119, 0, 600, rule="total", window=600),
+    )
+    assert verdict.allowed
+    assert verdict.binding is verdict.rule, "на успехе интересен остаток ручки"
+    assert verdict.refused == []
+
+
+def test_verdict_binding_prefers_the_longer_wait():
+    """`Retry-After` обязан покрывать каждый отказ: вернувшись раньше,
+    клиент получил бы ещё один 429."""
+    news = ratelimit.Decision(False, 6, 0, 40, 60, rule="news", window=300)
+    total = ratelimit.Decision(False, 120, 0, 120, 600, rule="total", window=600)
+    assert ratelimit.Verdict(news, total).binding is total
+    quick = ratelimit.Decision(False, 120, 0, 10, 600, rule="total", window=600)
+    assert ratelimit.Verdict(news, quick).binding is news
+
+
+def test_verdict_without_a_ceiling():
+    verdict = ratelimit.Verdict(
+        rule=ratelimit.Decision(False, 6, 0, 40, 60, rule="news", window=300)
+    )
+    assert verdict.total is None
+    assert not verdict.allowed
+    assert verdict.binding is verdict.rule
+
+
+def test_total_headers_are_separate_from_the_handle_ones():
+    total = ratelimit.Decision(True, 120, 118, 0, 600, rule="total", window=600)
+    assert ratelimit.total_headers(total) == {
+        "X-RateLimit-Total-Limit": "120",
+        "X-RateLimit-Total-Remaining": "118",
+        "X-RateLimit-Total-Reset": "600",
+    }
+    assert ratelimit.total_headers(None) == {}
+
+
 # ---------------- кто клиент и какие ручки дорогие ----------------
 
 
@@ -461,8 +655,12 @@ def test_limits_endpoint_shows_the_load_of_this_process(client, quiz_limit):
     for _ in range(3):
         client.post("/api/quiz/evaluate", json=payload)
     body = client.get("/api/limits").json()
-    assert body["stats"] == {"quiz": {"allowed": 2, "denied": 1}}
-    assert body["clients"] == 1
+    assert body["stats"]["quiz"] == {"allowed": 2, "denied": 1}
+    # Общий потолок клиента считает пропущенные запросы своим счётчиком,
+    # а чужой отказ на себя не берёт: третий запрос отбил бюджет квиза.
+    assert body["stats"]["total"] == {"allowed": 2, "denied": 0}
+    assert body["clients"] == 1, "клиент один, хотя счётчиков два"
+    assert body["counters"] == 2
 
 
 def test_limits_endpoint_reports_disabled_limits(client, monkeypatch):
@@ -503,3 +701,112 @@ def test_clients_are_counted_separately(client, monkeypatch, quiz_limit):
         "/api/quiz/evaluate", json=payload, headers={"X-Forwarded-For": "8.8.8.8"}
     )
     assert neighbour.status_code == 200
+
+
+# ---------------- общий потолок клиента на живых ручках ----------------
+
+
+@pytest.fixture()
+def nibble_limit(monkeypatch):
+    """Бюджеты ручек щедрые, потолок клиента тесный: ловим «по чуть-чуть».
+
+    Именно этот паттерн раздельные окна не видят: каждая ручка в своём
+    бюджете, а нагрузка на процесс уже заметная.
+    """
+    monkeypatch.setattr(config, "RATE_LIMIT_NEWS", 5)
+    monkeypatch.setattr(config, "RATE_LIMIT_NEWS_WINDOW", 300)
+    monkeypatch.setattr(config, "RATE_LIMIT_WEATHER", 5)
+    monkeypatch.setattr(config, "RATE_LIMIT_WEATHER_WINDOW", 900)
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL", 3)
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL_WINDOW", 600)
+    for attr in SERVICE_BY_PATH.values():
+        monkeypatch.setattr(f"app.main.{attr}", FakeService())
+
+
+def test_ceiling_stops_nibbling_at_every_handle(client, nibble_limit, monkeypatch):
+    assert client.get("/api/news?refresh=1").status_code == 200
+    assert client.get("/api/news?refresh=1").status_code == 200
+    assert client.get("/api/weather?refresh=1").status_code == 200
+
+    blocked = client.get("/api/weather?refresh=1")
+    assert blocked.status_code == 429
+    # Заголовки называют связавший бюджет: иначе клиент увидел бы
+    # «остаток есть» вместе с отказом.
+    assert blocked.headers["X-RateLimit-Rule"] == "total"
+    assert blocked.headers["X-RateLimit-Remaining"] == "0"
+    assert blocked.headers["X-RateLimit-Total-Remaining"] == "0"
+    assert blocked.headers["Retry-After"].isdigit()
+    assert "через" in blocked.json()["detail"]
+
+    # Бюджет ручки цел: отказ потолка слот не съел — выключили потолок,
+    # и тот же запрос прошёл.
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL", 0)
+    assert client.get("/api/weather?refresh=1").status_code == 200
+
+
+def test_ceiling_headers_ride_along_on_success(client, quiz_limit, monkeypatch):
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL", 10)
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL_WINDOW", 600)
+    r = client.post("/api/quiz/evaluate", json={"purpose": ["beach"]})
+    assert r.status_code == 200
+    assert r.headers["X-RateLimit-Rule"] == "quiz", "основные — про ручку"
+    assert r.headers["X-RateLimit-Total-Limit"] == "10"
+    assert r.headers["X-RateLimit-Total-Remaining"] == "9"
+    assert r.headers["X-RateLimit-Total-Reset"] == "600"
+
+
+def test_ceiling_can_be_switched_off(client, quiz_limit, monkeypatch):
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL", 0)
+    r = client.post("/api/quiz/evaluate", json={"purpose": ["beach"]})
+    assert r.status_code == 200
+    assert "X-RateLimit-Total-Limit" not in r.headers
+
+
+def test_ceiling_counts_only_expensive_routes(client, nibble_limit):
+    """Каталог, health и чтение из кэша потолок не расходуют: обычный
+    просмотр наказывать нельзя даже общим числом."""
+    for _ in range(10):
+        assert client.get("/api/attractions").status_code == 200
+        assert client.get("/api/news").status_code == 200
+        assert client.get("/api/health").status_code == 200
+    assert client.get("/api/news?refresh=1").status_code == 200
+    assert client.get("/api/limits").json()["stats"]["total"] == {
+        "allowed": 1,
+        "denied": 0,
+    }
+
+
+def test_ceiling_is_per_client(client, nibble_limit, monkeypatch):
+    monkeypatch.setattr(config, "TRUST_PROXY", True)
+    headers = {"X-Forwarded-For": "1.1.1.1"}
+    for _ in range(3):
+        assert client.get("/api/news?refresh=1", headers=headers).status_code == 200
+    assert client.get("/api/news?refresh=1", headers=headers).status_code == 429
+    # Сосед за тем же прокси свой потолок ещё не тронул.
+    neighbour = client.get(
+        "/api/news?refresh=1", headers={"X-Forwarded-For": "8.8.8.8"}
+    )
+    assert neighbour.status_code == 200
+
+
+def test_ceiling_429_is_logged_for_the_operator(client, nibble_limit, caplog):
+    with caplog.at_level(logging.WARNING, logger="crimea_gid.ratelimit"):
+        for _ in range(4):
+            client.get("/api/news?refresh=1")
+    assert "429 total" in caplog.text
+    assert "исчерпал бюджет 3 за 600 с" in caplog.text
+
+
+def test_limits_endpoint_reports_the_ceiling(client, monkeypatch):
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL", 120)
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL_WINDOW", 600)
+    body = client.get("/api/limits").json()
+    assert body["total"]["name"] == "total"
+    assert body["total"]["limit"] == 120
+    assert body["total"]["window"] == 600
+    assert body["total"]["hint"]
+    # Потолок — не ручка: в списке правил его нет и быть не должно.
+    assert all(rule["name"] != "total" for rule in body["rules"])
+
+    monkeypatch.setattr(config, "RATE_LIMIT_TOTAL", 0)
+    assert client.get("/api/limits").json()["total"] is None

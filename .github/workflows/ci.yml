@@ -40,6 +40,14 @@ jobs:
         run: node --test "tests/js/*.test.js"
       - name: Test suite
         run: python -m pytest -q
+      - name: Deploy rehearsal (без сервера и Docker)
+        # Сценарий выката проверяется на каждом push: репетиция гоняет те же
+        # проверки, что и настоящий deploy.sh (ref, состав репозитория,
+        # синтаксис скриптов, версия в коде), печатает план и ничего не меняет.
+        # Без этого шага deploy.sh «протухает» незаметно — до первого выката.
+        run: |
+          for f in deploy/*.sh; do bash -n "$f"; done
+          DRY_RUN=1 APP_DIR="$PWD" ./deploy/deploy.sh HEAD
 
   docker:
     runs-on: ubuntu-latest

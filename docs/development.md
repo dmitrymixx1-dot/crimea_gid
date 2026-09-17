@@ -27,14 +27,14 @@ for f in static/*.js; do node --check "$f"; done   # синтаксис всех
 .venv/bin/ruff check app tests              # линтер
 ```
 
-**384 Python-теста**, сеть не используется (все внешние вызовы заглушены),
-плюс **125 JS-тестов** (`tests/js/`, `node:test` без зависимостей):
+**418 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
+плюс **131 JS-тест** (`tests/js/`, `node:test` без зависимостей):
 
 | Модуль | Что покрывает |
 |---|---|
 | `test_api.py` | эндпоинты, фильтры (в т.ч. `tag=extreme`, `area=Западный`), заголовки безопасности и CSP, рендер Open Graph (origin из env/`X-Forwarded-*`), a11y-каркас, PWA-маршруты, контракт 422 (квиз) / 404 (погода) |
-| `test_ratelimit.py` | лимиты: скользящее окно и `Retry-After`, заголовки `X-RateLimit-*` и имя правила, `429` на квизе и `?refresh=1`, **раздельные бюджеты ручек** (исчерпанная лента не занимает бюджет погоды), счётчики нагрузки и `GET /api/limits`, строка в логе на каждый отказ, бесплатность обычного чтения, раздельный счёт клиентов по `X-Forwarded-For` (`TRUST_PROXY`) |
-| `test_assets.py` | аудит статики: бюджет веса и размеры картинок, отсутствие inline-обработчиков и пустых `alt`, внешние `<script>`, согласованность SW/манифеста, прод-конфигурация (`docker-compose.yml`, `Caddyfile`, скрипты бэкапа) |
+| `test_ratelimit.py` | лимиты: скользящее окно и `Retry-After`, заголовки `X-RateLimit-*` и имя правила, `429` на квизе и `?refresh=1`, **раздельные бюджеты ручек** (исчерпанная лента не занимает бюджет погоды), **общий потолок клиента** (`reserve`: запрос стоит в двух счётчиках, отказ потолка не тратит слот ручки, `Retry-After` покрывает оба окна, `X-RateLimit-Total-*`), счётчики нагрузки и `GET /api/limits`, строка в логе на каждый отказ, бесплатность обычного чтения, раздельный счёт клиентов по `X-Forwarded-For` (`TRUST_PROXY`) |
+| `test_assets.py` | аудит статики: бюджет веса и размеры картинок, отсутствие inline-обработчиков и пустых `alt`, внешние `<script>`, согласованность SW/манифеста, прод-конфигурация (`docker-compose.yml`, `Caddyfile`, скрипты бэкапа), автодеплой и **репетиция выката** (`deploy.sh --dry-run` запускается по-настоящему: без сервера, Docker и сети) |
 | `test_data.py` | схемы данных, границы координат, **якорные координаты** (`ANCHORS` — сверено с OSM), объём каталога и покрытие районов, согласованность каталога/квиза со словарями кода и `QuizIn`, покрытие всех `TAGS` в `quiz.purpose`/`PROFILES`/`PURPOSE_TOPICS`, источники, файлы картинок типов |
 | `test_load.py` | загрузчик JSON: схемы, кэширование, ошибка на отсутствующий файл |
 | `test_config.py` | формат версии, **согласованность версий** (код/README/SW/доки), дефолты, переопределение через env, пути |
@@ -47,9 +47,9 @@ for f in static/*.js; do node --check "$f"; done   # синтаксис всех
 | `tests/js/catalog-link.test.js` | фильтры каталога ↔ URL: дефолты не пишутся, round-trip кириллицы/спецсимволов, откат мусорной сортировки, флаг `open=1` |
 | `tests/js/favs-link.test.js` | избранное ↔ URL: round-trip id, дубли и мусор, только id из каталога получателя, устойчивость к битому query |
 | `tests/js/catalog-page.test.js` | порционный показ: размер первой порции, шаг догрузки, сужение подборки фильтром, устойчивость к мусору |
-| `tests/js/rate-limit.test.js` | ответ 429: разбор `Retry-After` (мусор → `null`, потолок часа), русские формы минут, «через 30 с» / «через 5 минут», текст без времени ожидания |
+| `tests/js/rate-limit.test.js` | ответ 429: разбор `Retry-After` (мусор → `null`, потолок часа), русские формы минут, «через 30 с» / «через 5 минут», текст без времени ожидания, чтение бюджета ручки и общего потолка (`X-RateLimit-Total-*`), отдых кнопки по потолку |
 | `tests/js/hourly.test.js` | окно почасового прогноза: крымское время вместо пояса устройства, «сейчас» ровно один раз и первым, переход через полночь, отставший кэш API (пустое окно вместо вчерашних часов), размер окна и мусорные значения, порог подписи осадков |
-| `test_i18n.py` | контракт английской локали: `en.json` покрывает строки фронта без мёртвых ключей, `places` переводит ровно те поля, что есть в данных, английские значения не содержат кириллицы (кроме бренда), `NUMBER_RE` синхронна с `I18n.fold`, бандл совпадает с источником (`build.py --check`) |
+| `test_i18n.py` | контракт английской локали: `en.json` покрывает строки фронта без мёртвых ключей, `places` переводит ровно те поля, что есть в данных, **вывески изданий переведены** (бейдж новости приходит из `sources.json`), английские значения не содержат кириллицы (кроме бренда), `NUMBER_RE` синхронна с `I18n.fold`, бандл совпадает с источником (`build.py --check`) |
 | `tests/js/i18n.test.js` | вторая речь: сворачивание чисел и порядок поиска ключа (буквал важнее свёрнутого), `params` в обе стороны, обход DOM (узлы, `title`/`aria-label`/`placeholder`/`alt`, `data-i18n="skip"`), идемпотентность, `applyLabels`/`stripLabels`, выбор языка |
 | `tests/js/i18n-labels.test.js` | покрытие подписей, которые СОБИРАЮТ модули: вызывает `CatalogPage.statusLabel`, `RateLimit.waitText/message/budgetText`, `OpenNow.label` (все ветки и 12 месяцев) и `Hourly.hourLabel` и требует, чтобы словарь знал результат |
 | `tests/js/open-now.test.js` | «открыто сейчас»: крымское время вне пояса устройства, дневные границы `firstDay`/`lastDay` (в т.ч. зимние диапазоны), сезоны через Новый год, границы окна, выходные дни, дата открытия в подписи вне сезона, битые правила |
@@ -79,7 +79,9 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
    → `ruff format --check app tests tools` →
    `node --check` (`app.js`, `plan-link.js`, `catalog-link.js`,
    `catalog-page.js`, `open-now.js`, `favs-link.js`, `sw.js`) →
-   `node --test "tests/js/*.test.js"` → `pytest -q`;
+   `node --test "tests/js/*.test.js"` → `pytest -q` →
+   **репетиция выката** (`bash -n deploy/*.sh` + `DRY_RUN=1 ./deploy/deploy.sh HEAD`:
+   сценарий деплоя проверяется на каждый push, без сервера и Docker);
 2. **docker** — сборка образа и валидация compose-стека
    (`docker compose config` с `.env` и проверка, что без него конфиг падает).
 
@@ -108,8 +110,8 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 | Новый RSS-источник | строка в `sources.json`, `"type": "rss"` | `test_data.py::test_sources_urls_unique` |
 | Новый TG-канал | строка в `sources.json`, `"type": "telegram"`, url `https://t.me/s/<канал>` (только публичные) | то же |
 | Новый город погоды | кортеж в `CITIES` (`app/services/weather.py`) | `test_weather.py` |
-| Новый лимит | `Rule` в `rules()` (`app/ratelimit.py`) + дефолт в `config.py`, строка в `.env.example` и `docker-compose.yml`, таблица в [docs/api.md](api.md#ограничение-частоты-запросов); подписи отказа — `static/rate-limit.js` | `test_ratelimit.py`, `test_config.py`, `test_assets.py`, `tests/js/rate-limit.test.js` |
-| Новый шаг деплоя | `deploy/deploy.sh` (исполняется на сервере) + шаг в `.github/workflows/deploy.yml`; секреты — только в GitHub | `test_assets.py::test_deploy_*` |
+| Новый лимит | `Rule` в `rules()` (`app/ratelimit.py`) + дефолт в `config.py`, строка в `.env.example` и `docker-compose.yml`, таблица в [docs/api.md](api.md#ограничение-частоты-запросов); подписи отказа — `static/rate-limit.js`. Общий потолок клиента (`total`) живёт рядом: `total_rule()` + `RATE_LIMIT_TOTAL`(+`_WINDOW`) | `test_ratelimit.py`, `test_config.py`, `test_assets.py`, `tests/js/rate-limit.test.js` |
+| Новый шаг деплоя | `deploy/deploy.sh` (исполняется на сервере) + шаг в `.github/workflows/deploy.yml`; секреты — только в GitHub. Шаг обязан попадать и в репетицию: проверка — в `check_repo`, строка плана — в блок `DRY_RUN` | `test_assets.py::test_deploy_*`, `test_assets.py::test_deploy_rehearsal_*` (запускают `--dry-run` по-настоящему) |
 | Новое поле прогноза | параметр в `_fetch_city` (`hourly=…`) + разбор в `hourly_window()`; показ — `static/hourly.js` (правило окна держат JS-тесты) | `test_weather.py`, `tests/js/hourly.test.js` |
 | Новая морская точка | кортеж в `SEA_POINTS` (`app/services/marine.py`), id — как у курорта в `CITIES`, координаты — в открытой воде в 1–8 км от города | `test_sea.py` |
 | Новый порог купального индекса | правила `verdict()` в `app/services/marine.py` (во фронте их дублировать нельзя) | `test_sea.py` |
@@ -136,9 +138,15 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 
 - **Ответ 429 в dev?** Лимиты действуют и локально: квиз — 30 расчётов
   в минуту, `?refresh=1` — свой бюджет у каждой ручки (лента 6 за 5 минут,
-  погода 4 за 15, море 3 за 30). Для бэнчмарков и ручных прогонов ставьте
-  `RATE_LIMIT_ENABLED=0`; посмотреть текущие бюджеты и нагрузку —
-  `curl -s localhost:8000/api/limits`.
+  погода 4 за 15, море 3 за 30), а поверх них — общий потолок клиента
+  (120 дорогих запросов за 10 минут, `RATE_LIMIT_TOTAL`). Для бэнчмарков
+  и ручных прогонов ставьте `RATE_LIMIT_ENABLED=0`; посмотреть текущие
+  бюджеты и нагрузку — `curl -s localhost:8000/api/limits`
+  (`X-RateLimit-Rule: total` в отказе означает, что отбил потолок).
+- **Проверить сценарий выката без сервера?**
+  `DRY_RUN=1 APP_DIR=$PWD ./deploy/deploy.sh HEAD` — репетиция: проверки
+  и план, ничего не меняет. С тегом сверяется и версия:
+  `EXPECT_VERSION=1.9.0 ./deploy/deploy.sh --dry-run HEAD`.
 - **Лента «офлайн» в dev-машине?** Проверьте исходящий HTTPS
   (`curl -I https://tass.ru/rss/v2.xml`). При недоступной сети приложение
   корректно показывает снапшот — это штатный офлайн-режим.
@@ -161,5 +169,8 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 5. PR в `main`: CI обязан быть зелёным (test + docker build).
 6. Выкатить: `git pull && docker compose up -d --build` на сервере —
    подробности и бэкапы в [deploy.md](deploy.md). Если настроен
-   автодеплой, достаточно `git tag v1.8.0 && git push --tags`:
-   workflow сам прогонит тесты и выкатит релиз.
+   автодеплой, достаточно `git tag v1.9.0 && git push --tags`:
+   workflow сам прогонит тесты, репетицию выката и выкатит релиз.
+   До первого выката сценарий стоит проверить репетицией
+   (`./deploy/deploy.sh --dry-run v1.9.0`) или ручным запуском workflow
+   с `dry_run=true` — ни сервера, ни секретов для этого не нужно.

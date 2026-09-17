@@ -27,6 +27,10 @@ services:
       RATE_LIMIT_WEATHER_WINDOW: "${RATE_LIMIT_WEATHER_WINDOW:-900}"
       RATE_LIMIT_SEA: "${RATE_LIMIT_SEA:-3}"
       RATE_LIMIT_SEA_WINDOW: "${RATE_LIMIT_SEA_WINDOW:-1800}"
+      # Общий потолок клиента поверх бюджетов ручек: «по чуть-чуть
+      # с каждой ручки» в сумме нагружает процесс не меньше одной ручки.
+      RATE_LIMIT_TOTAL: "${RATE_LIMIT_TOTAL:-120}"
+      RATE_LIMIT_TOTAL_WINDOW: "${RATE_LIMIT_TOTAL_WINDOW:-600}"
       # Приложение за своим Caddy: реальный адрес клиента — первый
       # в X-Forwarded-For, иначе все гости делили бы один лимит на IP прокси.
       TRUST_PROXY: "${TRUST_PROXY:-1}"

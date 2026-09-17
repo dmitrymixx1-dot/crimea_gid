@@ -33,7 +33,9 @@ logger = logging.getLogger("crimea_gid.ratelimit")
 async def rate_limit(request, call_next):
     """Лимит на дорогие ручки: `POST /api/quiz/evaluate` (перебор каталога)
     и `?refresh=1` у ленты, погоды и моря (поход во внешние источники).
-    Бюджет у каждой ручки свой (`ratelimit.rules()`).
+    Бюджет у каждой ручки свой (`ratelimit.rules()`), а поверх них —
+    общий потолок клиента (`ratelimit.total_rule()`): он ловит того,
+    кто берёт «по чуть-чуть» с каждой ручки.
 
     Всё остальное считаем бесплатно: каталог, health и статика не должны
     наказывать обычный просмотр. Отказ — `429` с `Retry-After`, а не 500
@@ -45,22 +47,26 @@ async def rate_limit(request, call_next):
     if rule is None:
         return await call_next(request)
     ip = ratelimit.client_ip(request)
-    decision = limiter.check(f"{rule.name}:{ip}", rule.limit, rule.window)
-    headers = ratelimit.headers(decision)
-    if not decision.allowed:
+    verdict = ratelimit.check_rule(rule, ip)
+    # Основные заголовки описывают тот бюджет, который решил исход:
+    # на успехе это ручка, на отказе — связавший потолок (иначе клиент
+    # увидел бы «остаток есть» вместе с 429).
+    binding = verdict.binding
+    headers = ratelimit.headers(binding) | ratelimit.total_headers(verdict.total)
+    if not verdict.allowed:
         # В лог — по строке на отказ: `docker compose logs` и есть та
         # статистика нагрузки, по которой настраивают бюджеты.
         logger.warning(
             "429 %s: клиент %s исчерпал бюджет %d за %d с",
-            rule.name,
+            binding.rule,
             ip,
-            rule.limit,
-            rule.window,
+            binding.limit,
+            binding.window,
         )
-        headers[ratelimit.HEADER_RETRY_AFTER] = str(decision.retry_after)
+        headers[ratelimit.HEADER_RETRY_AFTER] = str(binding.retry_after)
         return JSONResponse(
             status_code=429,
-            content={"detail": ratelimit.detail(decision.retry_after)},
+            content={"detail": ratelimit.detail(binding.retry_after)},
             headers=headers,
         )
     response = await call_next(request)
@@ -122,13 +128,19 @@ async def limits():
 
     Ручка бесплатная (лимитом не закрыта): она и нужна, чтобы настроить
     лимиты по факту, а не гадать. `stats` — суммы по всем клиентам,
-    без адресов; `clients` — сколько клиентов сейчас в памяти лимитера.
+    без адресов; `total` — общий потолок клиента поверх ручек (`null`,
+    если выключен); `clients` — сколько разных клиентов в памяти,
+    `counters` — сколько счётчиков они занимают (на клиента их несколько:
+    по одному на тронутую ручку плюс общий потолок).
     """
+    total = ratelimit.total_rule()
     return {
         "enabled": config.RATE_LIMIT_ENABLED,
         "rules": [rule.as_dict() for rule in ratelimit.rules()],
+        "total": total.as_dict() if total else None,
         "stats": limiter.stats(),
-        "clients": len(limiter),
+        "clients": limiter.clients(),
+        "counters": len(limiter),
     }
 
 

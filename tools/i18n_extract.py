@@ -276,8 +276,8 @@ def skeleton(report: dict) -> dict:
 
     Две секции — два разных контракта: `ui` обязана совпадать с кодом
     фронта (оба направления: ни дыр, ни мёртвых ключей), `labels` описывает
-    подписи, которые приходят *извне* (данные квиза, подписи сервисов,
-    модули фронта) и потому статикой не проверяются.
+    подписи, которые приходят *извне* (данные квиза и источников, подписи
+    сервисов, модули фронта) и потому статикой не проверяются.
     """
     return {
         "ui": dict.fromkeys(report["front_keys"], ""),
@@ -334,6 +334,32 @@ def python_labels() -> set[str]:
     return {t for t in out if t}
 
 
+def source_labels() -> set[str]:
+    """Вывески изданий: их печатает бейдж новости (`it.source` в app.js).
+
+    Значения приходят из данных (`app/data/sources.json` и офлайн-снапшот),
+    поэтому статика их не видит, а английский экран без перевода оставил бы
+    в ленте «РБК» и «Крым.Цифровой». Латинские вывески («News.ru») не
+    требуем: переводить там нечего, обходчик оставит их как есть. Сами
+    заголовки — чужой текст, их словарь не касается вовсе.
+    """
+    out: set[str] = set()
+    for name in ("sources.json", "news_snapshot.json"):
+        path = ROOT / "app" / "data" / name
+        if not path.exists():
+            continue
+        data = json.loads(path.read_text(encoding="utf-8"))
+        records = data.get("items", data) if isinstance(data, dict) else data
+        if not isinstance(records, list):
+            continue
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            raw = record.get("name") or record.get("source") or ""
+            out.add(normalize(str(raw)))
+    return {text for text in out if has_cyrillic(text)}
+
+
 def collect(sources: list[Path] | None = None, exempt: set[str] | None = None) -> dict:
     """Главный вход для теста: строки фронта и сверка со словарём.
 
@@ -345,7 +371,7 @@ def collect(sources: list[Path] | None = None, exempt: set[str] | None = None) -
     found = {p.name: extract(p) for p in paths}
     ui = merged_ui()
     front_keys = dedupe([k for part in found.values() for k in part["plain"]])
-    foreign_keys = dedupe(sorted(quiz_texts() | python_labels()))
+    foreign_keys = dedupe(sorted(quiz_texts() | python_labels() | source_labels()))
     keys = dedupe(front_keys + foreign_keys)
 
     # Ключ принят, если он есть буквально ИЛИ в свёрнутом виде: подпись,

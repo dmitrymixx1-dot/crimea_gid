@@ -97,6 +97,8 @@ def test_rate_limit_defaults(monkeypatch):
         "RATE_LIMIT_WEATHER_WINDOW",
         "RATE_LIMIT_SEA",
         "RATE_LIMIT_SEA_WINDOW",
+        "RATE_LIMIT_TOTAL",
+        "RATE_LIMIT_TOTAL_WINDOW",
         "RATE_LIMIT_MAX_KEYS",
         "TRUST_PROXY",
     ):
@@ -115,6 +117,10 @@ def test_rate_limit_defaults(monkeypatch):
         # Море: волновую модель обновляют раз в 12 часов, воду — раз в сутки.
         assert config.RATE_LIMIT_SEA == 3
         assert config.RATE_LIMIT_SEA_WINDOW == 1800
+        # Общий потолок клиента: теснее суммы бюджетов ручек за то же окно
+        # (~315 запросов), но в десятки раз выше живой сессии.
+        assert config.RATE_LIMIT_TOTAL == 120
+        assert config.RATE_LIMIT_TOTAL_WINDOW == 600
         assert config.RATE_LIMIT_MAX_KEYS > 0
         assert config.TRUST_PROXY is False
     finally:
@@ -129,6 +135,8 @@ def test_rate_limit_env_override(monkeypatch):
     monkeypatch.setenv("RATE_LIMIT_QUIZ", "5")
     monkeypatch.setenv("RATE_LIMIT_NEWS", "2")
     monkeypatch.setenv("RATE_LIMIT_SEA_WINDOW", "60")
+    monkeypatch.setenv("RATE_LIMIT_TOTAL", "11")
+    monkeypatch.setenv("RATE_LIMIT_TOTAL_WINDOW", "77")
     monkeypatch.setenv("TRUST_PROXY", "1")
     importlib.reload(config)
     try:
@@ -136,6 +144,8 @@ def test_rate_limit_env_override(monkeypatch):
         assert config.RATE_LIMIT_QUIZ == 5
         assert config.RATE_LIMIT_NEWS == 2
         assert config.RATE_LIMIT_SEA_WINDOW == 60
+        assert config.RATE_LIMIT_TOTAL == 11
+        assert config.RATE_LIMIT_TOTAL_WINDOW == 77
         # Соседние ручки своими значениями не задеты.
         assert config.RATE_LIMIT_WEATHER == 4
         assert config.TRUST_PROXY is True
@@ -163,6 +173,51 @@ def test_rate_limit_legacy_refresh_var_still_works(monkeypatch):
         assert config.RATE_LIMIT_WEATHER == 2
         assert config.RATE_LIMIT_SEA == 9, "своя переменная важнее общей"
         assert config.RATE_LIMIT_QUIZ == 30, "квиз жил и живёт отдельно"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config)
+
+
+def test_total_ceiling_is_tighter_than_the_sum_of_handles(monkeypatch):
+    """Общий бюджет имеет смысл только если он теснее суммы раздельных:
+    иначе «по чуть-чуть с каждой ручки» так и осталось бы незамеченным.
+
+    Считаем, сколько дорогих запросов клиент успел бы сделать за окно
+    потолка при дефолтных бюджетах ручек."""
+    import importlib
+
+    for var in (
+        "RATE_LIMIT_QUIZ",
+        "RATE_LIMIT_QUIZ_WINDOW",
+        "RATE_LIMIT_REFRESH",
+        "RATE_LIMIT_REFRESH_WINDOW",
+        "RATE_LIMIT_NEWS",
+        "RATE_LIMIT_NEWS_WINDOW",
+        "RATE_LIMIT_WEATHER",
+        "RATE_LIMIT_WEATHER_WINDOW",
+        "RATE_LIMIT_SEA",
+        "RATE_LIMIT_SEA_WINDOW",
+        "RATE_LIMIT_TOTAL",
+        "RATE_LIMIT_TOTAL_WINDOW",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    importlib.reload(config)
+    try:
+        window = config.RATE_LIMIT_TOTAL_WINDOW
+        handles = (
+            (config.RATE_LIMIT_QUIZ, config.RATE_LIMIT_QUIZ_WINDOW),
+            (config.RATE_LIMIT_NEWS, config.RATE_LIMIT_NEWS_WINDOW),
+            (config.RATE_LIMIT_WEATHER, config.RATE_LIMIT_WEATHER_WINDOW),
+            (config.RATE_LIMIT_SEA, config.RATE_LIMIT_SEA_WINDOW),
+        )
+        # Сколько раз каждая ручка успеет открыть окно за окно потолка.
+        possible = sum(limit * max(1, window // w) for limit, w in handles)
+        assert config.RATE_LIMIT_TOTAL < possible, (
+            f"потолок {config.RATE_LIMIT_TOTAL} не теснее суммы ручек {possible}"
+        )
+        # И не настолько тесный, чтобы задеть живого человека: сессия
+        # квиза с планами и парой обновлений ленты — это десятки запросов.
+        assert config.RATE_LIMIT_TOTAL >= 50
     finally:
         monkeypatch.undo()
         importlib.reload(config)

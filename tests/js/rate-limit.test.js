@@ -100,6 +100,7 @@ describe("readBudget", () => {
       limit: 6,
       remaining: 4,
       reset: 300,
+      total: null,
     });
   });
 
@@ -113,12 +114,109 @@ describe("readBudget", () => {
     const budget = R.readBudget(
       headers({ "X-RateLimit-Limit": "шесть", "X-RateLimit-Remaining": "0" })
     );
-    assert.deepEqual(budget, { rule: null, limit: null, remaining: 0, reset: null });
+    assert.deepEqual(budget, {
+      rule: null,
+      limit: null,
+      remaining: 0,
+      reset: null,
+      total: null,
+    });
   });
 
   it("пустое имя правила не превращается в строку «null»", () => {
     const budget = R.readBudget(headers({ "X-RateLimit-Remaining": "1" }));
     assert.equal(budget.rule, null);
+  });
+});
+
+describe("общий потолок клиента (X-RateLimit-Total-*)", () => {
+  it("читается своими заголовками и не путается с бюджетом ручки", () => {
+    const budget = R.readBudget(
+      headers({
+        "X-RateLimit-Rule": "news",
+        "X-RateLimit-Limit": "6",
+        "X-RateLimit-Remaining": "4",
+        "X-RateLimit-Reset": "300",
+        "X-RateLimit-Total-Limit": "120",
+        "X-RateLimit-Total-Remaining": "17",
+        "X-RateLimit-Total-Reset": "600",
+      })
+    );
+    assert.deepEqual(budget.total, { limit: 120, remaining: 17, reset: 600 });
+    assert.equal(budget.remaining, 4, "остаток ручки остался своим");
+  });
+
+  it("потолок выключен — поля нет, а не ноль", () => {
+    const budget = R.readBudget(headers({ "X-RateLimit-Remaining": "4" }));
+    assert.equal(budget.total, null);
+    assert.equal(R.readCeiling(headers({})), null);
+    assert.equal(R.readCeiling(null), null);
+  });
+
+  it("мусор в потолке → null в поле, а не NaN", () => {
+    assert.deepEqual(
+      R.readCeiling(
+        headers({
+          "X-RateLimit-Total-Limit": "120",
+          "X-RateLimit-Total-Remaining": "много",
+        })
+      ),
+      { limit: 120, remaining: null, reset: null }
+    );
+    assert.equal(
+      R.readCeiling(headers({ "X-RateLimit-Total-Remaining": "много" })),
+      null,
+      "ни одного числа — потолка нет"
+    );
+  });
+
+  it("имя потолка совпадает с правилом, которое сервер ставит на отказе", () => {
+    assert.equal(R.CEILING_RULE, "total");
+    const refused = R.readBudget(
+      headers({
+        "X-RateLimit-Rule": "total",
+        "X-RateLimit-Limit": "120",
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": "600",
+      })
+    );
+    assert.equal(refused.rule, R.CEILING_RULE);
+  });
+
+  it("кнопка отдыхает по потолку, даже когда остаток ручки не пуст", () => {
+    const budget = {
+      remaining: 4,
+      reset: 300,
+      total: { limit: 120, remaining: 0, reset: 600 },
+    };
+    assert.equal(R.cooldownSeconds(budget), 600);
+    // Из двух ожиданий берём большее: оно покрывает оба окна.
+    assert.equal(R.cooldownSeconds({ ...budget, remaining: 0, reset: 900 }, "30"), 900);
+    // Потолок не исчерпан — ждём только свою ручку.
+    assert.equal(
+      R.cooldownSeconds({ ...budget, total: { limit: 120, remaining: 3, reset: 600 } }),
+      0
+    );
+  });
+
+  it("подпись не обещает обновлений, которые сервер уже не отдаст", () => {
+    assert.equal(
+      R.budgetText({
+        limit: 6,
+        remaining: 4,
+        total: { limit: 120, remaining: 0, reset: 600 },
+      }),
+      "обновления исчерпаны"
+    );
+    // Потолок почти пуст, но не пуст — говорим про свою ручку, как раньше.
+    assert.equal(
+      R.budgetText({
+        limit: 6,
+        remaining: 4,
+        total: { limit: 120, remaining: 1, reset: 600 },
+      }),
+      "осталось 4 обновления из 6"
+    );
   });
 });
 
