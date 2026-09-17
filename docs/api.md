@@ -320,7 +320,7 @@ inline-обработчики вида `onerror=` во фронтенде зап
 | `failed_sources` | имена источников, не ответивших при последнем опросе |
 | `total` / `crimea_total` | всего элементов / из них про Крым (`crimea_score > 0`) |
 | `items[].crimea_score` | баллы «крымскости» (маркеры городов и географии) |
-| `items[].topics` | до 3 тем: `safety` `transport` `beach` `weather` `events` `food` `history` |
+| `items[].topics` | до 3 тем: `safety` `transport` `beach` `weather` `nature` `events` `food` `history` |
 | `items[].id` | `n<N>` — живые элементы, `s<N>` — из офлайн-снапшота |
 
 В офлайн-режиме элементы снапшота могут содержать флаг `sample: true`

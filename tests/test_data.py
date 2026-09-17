@@ -4,6 +4,7 @@ from app.services.recommend import (
     DAYS_BY_DURATION,
     ITINERARY_DAYS,
     PROFILES,
+    PURPOSE_TOPICS,
     TAGS,
     TYPE_META,
 )
@@ -99,6 +100,25 @@ def test_quiz_purpose_options_are_tags():
         if q["id"] == "purpose":
             for o in q["options"]:
                 assert o["id"] in TAGS, f"квиз: опция {o['id']} не тег"
+
+
+def test_quiz_purpose_options_cover_all_tags():
+    purpose = next(q for q in get_quiz()["questions"] if q["id"] == "purpose")
+    purpose_ids = {o["id"] for o in purpose["options"]}
+    assert purpose_ids == set(TAGS), "квиз должен покрывать все теги каталога"
+
+
+def test_profiles_and_news_topics_cover_all_purposes():
+    from app.services.news import TOPIC_RULES
+
+    purpose = next(q for q in get_quiz()["questions"] if q["id"] == "purpose")
+    purpose_ids = {o["id"] for o in purpose["options"]}
+    news_topics = {topic for topic, _ in TOPIC_RULES}
+    assert set(PROFILES) == purpose_ids
+    assert set(PURPOSE_TOPICS) == purpose_ids
+    for tag, topics in PURPOSE_TOPICS.items():
+        assert topics, tag
+        assert topics <= news_topics, f"{tag}: неизвестные темы новостей {topics}"
 
 
 def test_quiz_duration_options_have_planner_entry():

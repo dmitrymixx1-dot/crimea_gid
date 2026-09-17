@@ -29,14 +29,14 @@ node --check static/app.js && node --check static/plan-link.js \
 .venv/bin/ruff check app tests              # линтер
 ```
 
-**161 Python-тест**, сеть не используется (все внешние вызовы заглушены),
+**165 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
 плюс **14 JS-тестов** (`tests/js/`, `node:test` без зависимостей):
 
 | Модуль | Что покрывает |
 |---|---|
 | `test_api.py` | эндпоинты, фильтры (в т.ч. `tag=extreme`, `area=Западный`), заголовки безопасности и CSP, рендер Open Graph (origin из env/`X-Forwarded-*`), a11y-каркас, PWA-маршруты, контракт 422 (квиз) / 404 (погода) |
 | `test_assets.py` | аудит статики: бюджет веса и размеры картинок, отсутствие inline-обработчиков и пустых `alt`, внешние `<script>`, согласованность SW/манифеста |
-| `test_data.py` | схемы данных, границы координат, **якорные координаты** (`ANCHORS` — сверено с OSM), объём каталога и покрытие районов, согласованность каталога/квиза со словарями кода и `QuizIn`, источники, файлы картинок типов |
+| `test_data.py` | схемы данных, границы координат, **якорные координаты** (`ANCHORS` — сверено с OSM), объём каталога и покрытие районов, согласованность каталога/квиза со словарями кода и `QuizIn`, покрытие всех `TAGS` в `quiz.purpose`/`PROFILES`/`PURPOSE_TOPICS`, источники, файлы картинок типов |
 | `test_load.py` | загрузчик JSON: схемы, кэширование, ошибка на отсутствующий файл |
 | `test_config.py` | формат версии, **согласованность версий** (код/README/SW/доки), дефолты, переопределение через env, пути |
 | `test_recommends.py` | матчинг (`_score_attraction` по факторам), профили, фильтры новостей, планировщик (слоты, районы, лимиты, запас) |
@@ -91,7 +91,7 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 | Новый RSS-источник | строка в `sources.json`, `"type": "rss"` | `test_data.py::test_sources_urls_unique` |
 | Новый TG-канал | строка в `sources.json`, `"type": "telegram"`, url `https://t.me/s/<канал>` (только публичные) | то же |
 | Новый город погоды | кортеж в `CITIES` (`app/services/weather.py`) | `test_weather.py` |
-| Новый тег | `TAGS` + `TAG_EMOJI` в `recommend.py`, вариант в `quiz.json`, при желании — профиль в `PROFILES` и правило в `purpose_topics` | `test_data.py`, `test_recommends.py` |
+| Новый тег | `TAGS` + `TAG_EMOJI`, профиль в `PROFILES`, связь с лентой в `PURPOSE_TOPICS` (`recommend.py`) + вариант в `quiz.json` | `test_data.py`, `test_recommends.py` |
 | Новый тип места | `TYPE_META` в `recommend.py` + картинка в `static/img/` + цвет в `TYPE_COLORS` (`app.js`) | `test_data.py::test_type_meta_images_exist` |
 | Оптимизировать картинки | `pip install pillow && python tools/optimize_images.py` (бюджеты веса — в `test_assets.py` и в самом скрипте) | `test_assets.py::test_image_weight_budget` |
 | Новая тема новостей | правило в `TOPIC_RULES` (`news.py`, порядок = приоритет) + подпись в `TOPIC_LABELS` (`app.js`) | `test_news.py::test_topics_*` |

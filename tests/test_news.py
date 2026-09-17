@@ -41,6 +41,10 @@ def test_topics_history():
     assert "history" in match_topics("Археологи завершили раскопки в Херсонесе")
 
 
+def test_topics_nature():
+    assert "nature" in match_topics("В заповеднике открыли новую экотропу к мысу")
+
+
 # ------------------- сборка ленты -------------------
 
 def _service(monkeypatch, tmp_path, items=None, fail=False):

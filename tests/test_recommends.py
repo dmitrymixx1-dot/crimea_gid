@@ -1,3 +1,4 @@
+from app.services.load import get_quiz
 from app.services.recommend import PROFILES, _score_attraction, evaluate, plan_itinerary
 
 
@@ -98,8 +99,16 @@ def test_itinerary_slots_are_known():
 
 
 def test_profiles_cover_all_quiz_purposes():
-    for purpose in ("beach", "nature", "history", "food", "family", "photo"):
-        assert purpose in PROFILES
+    purpose = next(q for q in get_quiz()["questions"] if q["id"] == "purpose")
+    for option in purpose["options"]:
+        assert option["id"] in PROFILES
+
+
+def test_each_quiz_purpose_has_recommendations():
+    purpose = next(q for q in get_quiz()["questions"] if q["id"] == "purpose")
+    for option in purpose["options"]:
+        r = evaluate(_ans(purpose=[option["id"]]), [])
+        assert r["recommendations"], option["id"]
 
 
 # ---------------- тонкости матчинга ----------------
