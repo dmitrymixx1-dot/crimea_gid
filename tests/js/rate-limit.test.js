@@ -78,3 +78,97 @@ describe("message", () => {
     assert.equal(R.message("хз"), "Слишком часто. Попробуйте позже.");
   });
 });
+
+/* Заголовки ответа: у каждой ручки свой бюджет, поэтому имя правила
+   в бюджете так же важно, как числа. */
+function headers(map) {
+  return { get: name => (name in map ? map[name] : null) };
+}
+
+describe("readBudget", () => {
+  it("читает бюджет и имя правила", () => {
+    const budget = R.readBudget(
+      headers({
+        "X-RateLimit-Rule": "news",
+        "X-RateLimit-Limit": "6",
+        "X-RateLimit-Remaining": "4",
+        "X-RateLimit-Reset": "300",
+      })
+    );
+    assert.deepEqual(budget, {
+      rule: "news",
+      limit: 6,
+      remaining: 4,
+      reset: 300,
+    });
+  });
+
+  it("нет заголовков — null, а не выдуманный лимит", () => {
+    assert.equal(R.readBudget(headers({})), null);
+    assert.equal(R.readBudget(null), null);
+    assert.equal(R.readBudget({}), null, "не Headers и не объект с get");
+  });
+
+  it("мусор в числах → null в поле, а не NaN", () => {
+    const budget = R.readBudget(
+      headers({ "X-RateLimit-Limit": "шесть", "X-RateLimit-Remaining": "0" })
+    );
+    assert.deepEqual(budget, { rule: null, limit: null, remaining: 0, reset: null });
+  });
+
+  it("пустое имя правила не превращается в строку «null»", () => {
+    const budget = R.readBudget(headers({ "X-RateLimit-Remaining": "1" }));
+    assert.equal(budget.rule, null);
+  });
+});
+
+describe("cooldownSeconds", () => {
+  it("пустой бюджет — ждать нечего", () => {
+    assert.equal(R.cooldownSeconds(null), 0);
+    assert.equal(R.cooldownSeconds({ remaining: 3, reset: 300 }), 0);
+  });
+
+  it("исчерпанный бюджет держит кнопку до открытия окна", () => {
+    assert.equal(R.cooldownSeconds({ remaining: 0, reset: 300 }), 300);
+    assert.equal(R.cooldownSeconds({ remaining: 0, reset: null }), 0);
+    assert.equal(R.cooldownSeconds({ remaining: 0, reset: "хз" }), 0);
+  });
+
+  it("прямой отказ важнее пустого бюджета: берём большее из двух", () => {
+    assert.equal(R.cooldownSeconds(null, "30"), 30);
+    assert.equal(R.cooldownSeconds({ remaining: 0, reset: 60 }, "30"), 60);
+    assert.equal(R.cooldownSeconds({ remaining: 0, reset: 10 }, "45"), 45);
+  });
+
+  it("не обещает отдых дольше часа", () => {
+    assert.equal(R.cooldownSeconds(null, "99999"), R.MAX_SECONDS);
+  });
+});
+
+describe("budgetText", () => {
+  it("показывает остаток словами", () => {
+    assert.equal(
+      R.budgetText({ limit: 6, remaining: 1 }),
+      "осталось 1 обновление из 6"
+    );
+    assert.equal(
+      R.budgetText({ limit: 6, remaining: 2 }),
+      "осталось 2 обновления из 6"
+    );
+    assert.equal(
+      R.budgetText({ limit: 6, remaining: 5 }),
+      "осталось 5 обновлений из 6"
+    );
+  });
+
+  it("исчерпанный бюджет — не «осталось 0», а факт", () => {
+    assert.equal(R.budgetText({ limit: 6, remaining: 0 }), "обновления исчерпаны");
+  });
+
+  it("полный и незнакомый бюджет молчат", () => {
+    assert.equal(R.budgetText({ limit: 6, remaining: 6 }), "");
+    assert.equal(R.budgetText({ limit: null, remaining: 3 }), "");
+    assert.equal(R.budgetText({ limit: 6, remaining: null }), "");
+    assert.equal(R.budgetText(null), "");
+  });
+});

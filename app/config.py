@@ -47,11 +47,38 @@ RATE_LIMIT_ENABLED = os.environ.get("RATE_LIMIT_ENABLED", "1") not in (
 # 30 расчётов в минуту за глаза, скрипту-переборщику — нет.
 RATE_LIMIT_QUIZ = int(os.environ.get("RATE_LIMIT_QUIZ", "30"))
 RATE_LIMIT_QUIZ_WINDOW = int(os.environ.get("RATE_LIMIT_QUIZ_WINDOW", "60"))
-# `refresh=1` заставляет сервис идти в сеть: лента — это 11 источников,
-# погода — 18 городов, море — 15 точек. Кнопку «Обновить» нажимают
-# руками, поэтому лимит на 5 минут, а не на минуту.
-RATE_LIMIT_REFRESH = int(os.environ.get("RATE_LIMIT_REFRESH", "6"))
-RATE_LIMIT_REFRESH_WINDOW = int(os.environ.get("RATE_LIMIT_REFRESH_WINDOW", "300"))
+
+# `refresh=1` заставляет сервис идти в сеть, и стоит это по-разному:
+# лента — 11 источников, погода — 18 городов, море — 15 точек. Поэтому
+# бюджет у каждой ручки свой (было одно общее число на все три) — его
+# подбирают под фактическую нагрузку, а не под самую дорогую ручку.
+#
+# Ориентир — как часто данные вообще меняются и как их зовут:
+#   лента   — кнопка «Обновить» под рукой у человека, кэш 15 минут (6 за 5 мин);
+#   погода  — обновляют программно, модель Open-Meteo обновляется раз в час
+#             (4 за 15 мин);
+#   море    — волновую модель обновляют раз в 12 часов, воду — раз в сутки,
+#             чаще 3 раз за полчаса дёргать её незачем (3 за 30 мин).
+#
+# Обратная совместимость: старые `.env` задавали один общий
+# `RATE_LIMIT_REFRESH`(+`_WINDOW`) на все три ручки. Если он выставлен,
+# а своя переменная — нет, значение берётся из него: конфигурацию
+# прежних деплоев переписывать не нужно.
+_LEGACY_REFRESH = os.environ.get("RATE_LIMIT_REFRESH")
+_LEGACY_REFRESH_WINDOW = os.environ.get("RATE_LIMIT_REFRESH_WINDOW")
+
+RATE_LIMIT_NEWS = int(os.environ.get("RATE_LIMIT_NEWS", _LEGACY_REFRESH or "6"))
+RATE_LIMIT_NEWS_WINDOW = int(
+    os.environ.get("RATE_LIMIT_NEWS_WINDOW", _LEGACY_REFRESH_WINDOW or "300")
+)
+RATE_LIMIT_WEATHER = int(os.environ.get("RATE_LIMIT_WEATHER", _LEGACY_REFRESH or "4"))
+RATE_LIMIT_WEATHER_WINDOW = int(
+    os.environ.get("RATE_LIMIT_WEATHER_WINDOW", _LEGACY_REFRESH_WINDOW or "900")
+)
+RATE_LIMIT_SEA = int(os.environ.get("RATE_LIMIT_SEA", _LEGACY_REFRESH or "3"))
+RATE_LIMIT_SEA_WINDOW = int(
+    os.environ.get("RATE_LIMIT_SEA_WINDOW", _LEGACY_REFRESH_WINDOW or "1800")
+)
 # Сколько клиентов держим в памяти: защита от раздувания на общем NAT
 # и от сканирования. Самые давние ключи вытесняются.
 RATE_LIMIT_MAX_KEYS = int(os.environ.get("RATE_LIMIT_MAX_KEYS", "5000"))
@@ -95,4 +122,4 @@ CSP = (
     f"frame-ancestors {CSP_FRAME_ANCESTORS}"
 )
 
-APP_VERSION = "1.6.0"
+APP_VERSION = "1.7.0"

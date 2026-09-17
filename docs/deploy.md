@@ -50,7 +50,10 @@ curl -s https://<DOMAIN>/api/health     # {"ok":true,"name":"Крым.Гид","v
 | `CSP_FRAME_ANCESTORS` | | кому разрешено встраивать сайт в iframe |
 | `RATE_LIMIT_ENABLED` | | `0` — выключить лимиты на квиз и `refresh=1` |
 | `RATE_LIMIT_QUIZ` | | сколько расчётов квиза в минуту на клиента (30) |
-| `RATE_LIMIT_REFRESH` | | сколько принудительных обновлений в окно (6 за 300 с) |
+| `RATE_LIMIT_NEWS` / `_WINDOW` | | бюджет принудительных обновлений ленты (6 за 300 с) |
+| `RATE_LIMIT_WEATHER` / `_WINDOW` | | бюджет обновлений погоды (4 за 900 с) |
+| `RATE_LIMIT_SEA` / `_WINDOW` | | бюджет обновлений моря (3 за 1800 с) |
+| `RATE_LIMIT_REFRESH` / `_WINDOW` | | устаревший общий бюджет: фолбэк для трёх ручек выше |
 | `TRUST_PROXY` | | `1` — брать адрес клиента из `X-Forwarded-For` (за Caddy включён compose-ом) |
 
 Полный список ручек приложения — в [таблице README](../README.md#переменные-окружения).
@@ -86,16 +89,16 @@ Workflow [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)
 выкатывает релиз без ручного доступа к серверу:
 
 ```
-git tag v1.6.0 && git push --tags
+git tag v1.7.0 && git push --tags
         │
         ▼  GitHub Actions
   preflight: ruff + pytest + node --test          (тег с красными тестами не едет)
         ▼  ssh (ключ из секретов)
-  deploy/deploy.sh v1.6.0 на сервере:
+  deploy/deploy.sh v1.7.0 на сервере:
     git fetch --tags && git checkout --detach <тег>
     docker compose up -d --build
     ждём healthy (до 5 минут)
-    сверяем /api/health → версия == 1.6.0
+    сверяем /api/health → версия == 1.7.0
     docker image prune -f
 ```
 

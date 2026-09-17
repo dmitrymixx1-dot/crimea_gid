@@ -2,7 +2,7 @@
 # Выкат релиза на сервере. Штатно запускается workflow
 # .github/workflows/deploy.yml по SSH, но годится и для ручного обновления:
 #
-#   ./deploy/deploy.sh v1.6.0                     # выкатить тег
+#   ./deploy/deploy.sh v1.7.0                     # выкатить тег
 #   APP_DIR=/srv/crimea_gid ./deploy/deploy.sh v1.5.0   # откат на прошлый тег
 #
 # Секретов и токенов не нужно: образ собирается из исходников на сервере,
@@ -22,7 +22,7 @@ EXPECT_VERSION="${EXPECT_VERSION:-}"
 log() { printf '[deploy] %s\n' "$*"; }
 die() { printf '[deploy] ошибка: %s\n' "$*" >&2; exit 1; }
 
-[ -n "$REF" ] || die "укажите тег или коммит: ./deploy/deploy.sh v1.6.0"
+[ -n "$REF" ] || die "укажите тег или коммит: ./deploy/deploy.sh v1.7.0"
 [ -d "$APP_DIR" ] || die "нет каталога приложения: $APP_DIR (задайте APP_DIR=...)"
 
 cd "$APP_DIR"

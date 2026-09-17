@@ -4,6 +4,7 @@
     uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
 
+import logging
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -22,11 +23,17 @@ from .services.weather import CITY_IDS, weather_service
 
 app = FastAPI(title="Крым.Гид", version=APP_VERSION)
 
+# Отказы по лимиту пишем в лог: строка на 429 — единственная «метрика»
+# проекта без БД и внешних сервисов (см. `GET /api/limits` — там же
+# счётчики процесса).
+logger = logging.getLogger("crimea_gid.ratelimit")
+
 
 @app.middleware("http")
 async def rate_limit(request, call_next):
     """Лимит на дорогие ручки: `POST /api/quiz/evaluate` (перебор каталога)
     и `?refresh=1` у ленты, погоды и моря (поход во внешние источники).
+    Бюджет у каждой ручки свой (`ratelimit.rules()`).
 
     Всё остальное считаем бесплатно: каталог, health и статика не должны
     наказывать обычный просмотр. Отказ — `429` с `Retry-After`, а не 500
@@ -37,11 +44,19 @@ async def rate_limit(request, call_next):
     rule = ratelimit.match_rule(request)
     if rule is None:
         return await call_next(request)
-    name, limit, window = rule
-    key = f"{name}:{ratelimit.client_ip(request)}"
-    decision = limiter.check(key, limit, window)
+    ip = ratelimit.client_ip(request)
+    decision = limiter.check(f"{rule.name}:{ip}", rule.limit, rule.window)
     headers = ratelimit.headers(decision)
     if not decision.allowed:
+        # В лог — по строке на отказ: `docker compose logs` и есть та
+        # статистика нагрузки, по которой настраивают бюджеты.
+        logger.warning(
+            "429 %s: клиент %s исчерпал бюджет %d за %d с",
+            rule.name,
+            ip,
+            rule.limit,
+            rule.window,
+        )
         headers[ratelimit.HEADER_RETRY_AFTER] = str(decision.retry_after)
         return JSONResponse(
             status_code=429,
@@ -99,6 +114,22 @@ class QuizIn(BaseModel):
 @app.get("/api/health")
 async def health():
     return {"ok": True, "name": "Крым.Гид", "version": APP_VERSION}
+
+
+@app.get("/api/limits")
+async def limits():
+    """Бюджеты дорогих ручек и счётчики этого процесса.
+
+    Ручка бесплатная (лимитом не закрыта): она и нужна, чтобы настроить
+    лимиты по факту, а не гадать. `stats` — суммы по всем клиентам,
+    без адресов; `clients` — сколько клиентов сейчас в памяти лимитера.
+    """
+    return {
+        "enabled": config.RATE_LIMIT_ENABLED,
+        "rules": [rule.as_dict() for rule in ratelimit.rules()],
+        "stats": limiter.stats(),
+        "clients": len(limiter),
+    }
 
 
 @app.get("/api/tags")
