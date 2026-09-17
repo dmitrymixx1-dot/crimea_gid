@@ -1,0 +1,124 @@
+# Автодеплой по тегу: сначала проверяем релиз тестами, потом выкатываем
+# его по SSH. Никаких сторонних экшенов и секретов в репозитории: ключ,
+# хост и путь до клона лежат в секретах GitHub.
+#
+# Секреты (Settings → Secrets and variables → Actions):
+#   DEPLOY_HOST        — адрес сервера
+#   DEPLOY_USER        — пользователь с docker и доступом к каталогу клона
+#   DEPLOY_PATH        — каталог с клоном репозитория (напр. /opt/crimea_gid)
+#   DEPLOY_SSH_KEY     — приватный ключ ed25519 (публичный — на сервере)
+#   DEPLOY_PORT        — порт SSH (необязательно, по умолчанию 22)
+#   DEPLOY_KNOWN_HOSTS — вывод `ssh-keyscan -H <host>` (необязательно, но желателен)
+name: Deploy
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Тег или коммит для выката"
+        required: true
+        default: main
+
+# Два выката одновременно перепутали бы версии: пусть встают в очередь.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref_name }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # Тег мог быть навешен на коммит, который не прошёл CI
+      # (например, пуш тега без пуша ветки) — проверяем перед выкатом.
+      - name: Preflight (линтер и тесты релиза)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          ruff check app tests
+          python -m pytest -q
+          node --test "tests/js/*.test.js"
+
+      - name: Проверить секреты деплоя
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          missing=""
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH DEPLOY_SSH_KEY; do
+            [ -n "${!var:-}" ] || missing="$missing $var"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::не заданы секреты:$missing — Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+
+      - name: Настроить SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "${DEPLOY_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            echo "::warning::DEPLOY_KNOWN_HOSTS не задан — доверяем ключу хоста из ssh-keyscan"
+            ssh-keyscan -H "$DEPLOY_HOST" > ~/.ssh/known_hosts
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Выкатить
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          REF: ${{ github.event.inputs.ref || github.ref_name }}
+        run: |
+          # Теги вида v1.6.0 → ожидаемая версия 1.6.0 (без «v»);
+          # ветку версией не сверяем.
+          case "$REF" in
+            v*) expect="${REF#v}" ;;
+            *) expect="" ;;
+          esac
+          ssh -i ~/.ssh/deploy_key \
+              -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -p "${DEPLOY_PORT:-22}" \
+              "$DEPLOY_USER@$DEPLOY_HOST" \
+              "cd '$DEPLOY_PATH' && EXPECT_VERSION='$expect' ./deploy/deploy.sh '$REF'"
+
+      - name: Что получилось
+        if: success()
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+              -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              -p "${DEPLOY_PORT:-22}" \
+              "$DEPLOY_USER@$DEPLOY_HOST" \
+              "cd '$DEPLOY_PATH' && docker compose ps && git describe --tags --always"
