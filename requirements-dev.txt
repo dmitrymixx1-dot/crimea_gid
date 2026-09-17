@@ -1,6 +1,8 @@
 # Зависимости разработки и CI (в рантайм не попадают — см. requirements.txt).
 -r requirements.txt
 pytest>=8.0
-ruff>=0.6
+# Пinned: `ruff format --check` в CI обязан ходить той же версией,
+# что и локальный `ruff format` — иначе формат дрейфует между релизами.
+ruff==0.16.8
 # Разбор docker-compose.yml в tests/test_assets.py.
 PyYAML>=6.0

@@ -15,6 +15,7 @@
 Идемпотентно: повторный прогон поверх уже сжатых файлов почти не меняет
 вес (ресайз до тех же размеров + то же качество).
 """
+
 import argparse
 import sys
 from pathlib import Path
@@ -55,8 +56,11 @@ def optimize(path: Path, width: int, quality: int) -> tuple[int, int]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true",
-                        help="не перезаписывать, только сверить вес с бюджетом")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="не перезаписывать, только сверить вес с бюджетом",
+    )
     args = parser.parse_args()
 
     total = 0

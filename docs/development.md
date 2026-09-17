@@ -24,12 +24,13 @@ python3 -m venv .venv
 .venv/bin/python -m pytest tests/ -k weather -q    # по имени
 node --test "tests/js/*.test.js"            # JS-тесты шаринга плана и каталога
 node --check static/app.js && node --check static/plan-link.js \
-  && node --check static/catalog-link.js && node --check static/sw.js
+  && node --check static/catalog-link.js && node --check static/favs-link.js \
+  && node --check static/sw.js
 .venv/bin/ruff check app tests              # линтер
 ```
 
-**206 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
-плюс **33 JS-теста** (`tests/js/`, `node:test` без зависимостей):
+**209 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
+плюс **48 JS-тестов** (`tests/js/`, `node:test` без зависимостей):
 
 | Модуль | Что покрывает |
 |---|---|
@@ -44,8 +45,9 @@ node --check static/app.js && node --check static/plan-link.js \
 | `test_weather.py` | WMO-коды, разбор ответа Open-Meteo, день недели, кэш, фильтр по городу, падение сети, `CITIES` (18 курортов, границы, совпадение с каталогом) |
 | `test_e2e_smoke.py` | сквозные сценарии: квиз → план → ссылка (3 профиля из чек-листа), выполнимость плана по дням, deep-link места, ссылка на подборку каталога, precache PWA, контракт `/api/health` |
 | `tests/js/catalog-link.test.js` | фильтры каталога ↔ URL: дефолты не пишутся, round-trip кириллицы/спецсимволов, откат мусорной сортировки, флаг `open=1` |
+| `tests/js/favs-link.test.js` | избранное ↔ URL: round-trip id, дубли и мусор, только id из каталога получателя, устойчивость к битому query |
 | `tests/js/catalog-page.test.js` | порционный показ: размер первой порции, шаг догрузки, сужение подборки фильтром, устойчивость к мусору |
-| `tests/js/open-now.test.js` | «открыто сейчас»: крымское время вне пояса устройства, сезоны через Новый год, границы окна, выходные дни, битые правила |
+| `tests/js/open-now.test.js` | «открыто сейчас»: крымское время вне пояса устройства, дневные границы `firstDay`/`lastDay` (в т.ч. зимние диапазоны), сезоны через Новый год, границы окна, выходные дни, дата открытия в подписи вне сезона, битые правила |
 
 Соглашения:
 
@@ -68,9 +70,10 @@ node --check static/app.js && node --check static/plan-link.js \
 GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 и на PR:
 
-1. **test** — install deps (`requirements-dev.txt`) → `ruff check app tests` →
+1. **test** — install deps (`requirements-dev.txt`) → `ruff check app tests`
+   → `ruff format --check app tests tools` →
    `node --check` (`app.js`, `plan-link.js`, `catalog-link.js`,
-   `catalog-page.js`, `open-now.js`, `sw.js`) →
+   `catalog-page.js`, `open-now.js`, `favs-link.js`, `sw.js`) →
    `node --test "tests/js/*.test.js"` → `pytest -q`;
 2. **docker** — сборка образа и валидация compose-стека
    (`docker compose config` с `.env` и проверка, что без него конфиг падает).
@@ -79,7 +82,9 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 
 - Python: PEP 8, строки ≤ 88 символов, docstring на модулях, публичных
   классах и нетривиальных функциях. Комментарии и сообщения — на русском.
-  Стиль enforced: `ruff check app tests` (конфиг — `pyproject.toml`).
+  Стиль enforced: `ruff check app tests` + `ruff format app tests tools`
+  (конфиг — `pyproject.toml`; версия ruff закреплена в
+  `requirements-dev.txt`, чтобы формат не дрейфовал в CI).
 - Типизация: аннотации в сигнатурах сервисов (`dict`, `list[dict]`,
   `tuple[...]`); `pydantic.BaseModel` для тел запросов.
 - JS: ES2020, без транспиляции; `$`/`$$` — хелперы селекторов; состояние —

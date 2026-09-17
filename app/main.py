@@ -3,6 +3,7 @@
 Запуск:
     uvicorn app.main:app --host 0.0.0.0 --port 8000
 """
+
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -34,10 +35,25 @@ class QuizIn(BaseModel):
     `test_data.py::test_quiz_options_match_quiz_model`);
     мусор отклоняется с 422, а не превращается в дефолты."""
 
-    purpose: list[Literal[
-        "beach", "nature", "history", "culture", "food", "wine", "active",
-        "extreme", "family", "photo", "spa", "city", "view", "free", "romance",
-    ]] = Field(default_factory=list)
+    purpose: list[
+        Literal[
+            "beach",
+            "nature",
+            "history",
+            "culture",
+            "food",
+            "wine",
+            "active",
+            "extreme",
+            "family",
+            "photo",
+            "spa",
+            "city",
+            "view",
+            "free",
+            "romance",
+        ]
+    ] = Field(default_factory=list)
     season: Literal["summer", "autumn", "spring", "winter", "any"] = "any"
     tempo: Literal["relax", "medium", "active"] = "medium"
     budget: Literal["economy", "comfort", "premium"] = "comfort"
@@ -69,8 +85,9 @@ async def attractions(
         items = [a for a in items if a.get("area") == area]
     if q:
         q = q.lower()
-        items = [a for a in items if q in a["name"].lower()
-                 or q in a["description"].lower()]
+        items = [
+            a for a in items if q in a["name"].lower() or q in a["description"].lower()
+        ]
     return {"count": len(items), "items": items}
 
 
@@ -82,8 +99,7 @@ async def attraction_detail(attraction_id: str):
         if a["id"] == attraction_id:
             fallback = {"emoji": "📍", "label": a["type"], "img": "cat_nature.jpg"}
             return {**a, "type_meta": TYPE_META.get(a["type"], fallback)}
-    raise HTTPException(
-        status_code=404, detail=f"место «{attraction_id}» не найдено")
+    raise HTTPException(status_code=404, detail=f"место «{attraction_id}» не найдено")
 
 
 @app.get("/api/areas")
@@ -105,8 +121,7 @@ async def quiz_evaluate(payload: QuizIn):
 
 
 @app.get("/api/news")
-async def news(limit: int = Query(40, ge=1, le=100),
-               refresh: bool = False):
+async def news(limit: int = Query(40, ge=1, le=100), refresh: bool = False):
     data = await news_service.get(force=refresh)
     items = data["items"][:limit]
     out = dict(data)

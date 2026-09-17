@@ -17,6 +17,7 @@ def _get(svc, **kw):
 
 # ------------------- словари/классификация -------------------
 
+
 def test_crimea_score_detects_cities():
     assert crimea_score("В Ялте открыли новый пляж") >= 2
     assert crimea_score("Керченский пролив: паромы") >= 2
@@ -46,6 +47,7 @@ def test_topics_nature():
 
 
 # ------------------- сборка ленты -------------------
+
 
 def _service(monkeypatch, tmp_path, items=None, fail=False):
     svc = NewsService()
@@ -77,12 +79,24 @@ def test_offline_fallback_to_snapshot(monkeypatch, tmp_path):
 
 def test_live_mode_dedupes_and_ranks_crimea_first(monkeypatch, tmp_path):
     items = [
-        {"title": "Крым: новый фестиваль", "link": "http://x/1",
-         "summary": "в Ялте", "published": "2026-09-15T10:00:00+03:00"},
-        {"title": "Крым: новый фестиваль", "link": "http://x/2",
-         "summary": "дубль с другой ленты", "published": "2026-09-14T10:00:00+03:00"},
-        {"title": "Общая новость дня", "link": "http://x/3",
-         "summary": "", "published": "2026-09-15T09:00:00+03:00"},
+        {
+            "title": "Крым: новый фестиваль",
+            "link": "http://x/1",
+            "summary": "в Ялте",
+            "published": "2026-09-15T10:00:00+03:00",
+        },
+        {
+            "title": "Крым: новый фестиваль",
+            "link": "http://x/2",
+            "summary": "дубль с другой ленты",
+            "published": "2026-09-14T10:00:00+03:00",
+        },
+        {
+            "title": "Общая новость дня",
+            "link": "http://x/3",
+            "summary": "",
+            "published": "2026-09-15T09:00:00+03:00",
+        },
     ]
     svc, _ = _service(monkeypatch, tmp_path, items=items)
     out = _get(svc, force=True)
@@ -94,8 +108,14 @@ def test_live_mode_dedupes_and_ranks_crimea_first(monkeypatch, tmp_path):
 
 
 def test_cache_ttl_prevents_refetch(monkeypatch, tmp_path):
-    items = [{"title": "Крым: тест", "link": "http://x/1",
-              "summary": "", "published": "2026-09-15T10:00:00+03:00"}]
+    items = [
+        {
+            "title": "Крым: тест",
+            "link": "http://x/1",
+            "summary": "",
+            "published": "2026-09-15T10:00:00+03:00",
+        }
+    ]
     svc, calls = _service(monkeypatch, tmp_path, items=items)
     first = _get(svc, force=True)
     n1 = calls["n"]
@@ -108,8 +128,14 @@ def test_cache_ttl_prevents_refetch(monkeypatch, tmp_path):
 
 
 def test_file_cache_restores_after_restart(monkeypatch, tmp_path):
-    items = [{"title": "Крым: перезапуск", "link": "http://x/9",
-              "summary": "", "published": "2026-09-15T11:00:00+03:00"}]
+    items = [
+        {
+            "title": "Крым: перезапуск",
+            "link": "http://x/9",
+            "summary": "",
+            "published": "2026-09-15T11:00:00+03:00",
+        }
+    ]
     svc, _ = _service(monkeypatch, tmp_path, items=items)
     _get(svc, force=True)
     assert news_mod.config.NEWS_CACHE_FILE.exists()
@@ -123,8 +149,15 @@ def test_file_cache_restores_after_restart(monkeypatch, tmp_path):
 def test_payload_shape(monkeypatch, tmp_path):
     svc, _ = _service(monkeypatch, tmp_path, fail=True)
     out = _get(svc, force=True)
-    for key in ("online", "updated_at", "sources", "failed_sources",
-                "total", "crimea_total", "items"):
+    for key in (
+        "online",
+        "updated_at",
+        "sources",
+        "failed_sources",
+        "total",
+        "crimea_total",
+        "items",
+    ):
         assert key in out
     item = out["items"][0]
     for key in ("id", "title", "link", "source", "published", "topics"):

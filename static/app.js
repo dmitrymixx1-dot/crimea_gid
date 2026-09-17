@@ -273,12 +273,55 @@ function renderHome() {
     <section class="section">
       <div class="section-head">
         <h2>❤ В избранном</h2>
-        <span class="sub">${favs.length} мест — сохранено в вашем браузере</span>
+        <span style="display:flex;gap:10px;align-items:center">
+          <span class="sub">${favs.length} ${plural(favs.length, ["место", "места", "мест"])} — сохранено в вашем браузере</span>
+          <button class="btn btn-outline btn-sm" id="fav-share"
+            title="Скопировать ссылку на ваше избранное">🔗 Ссылка на избранное</button>
+        </span>
       </div>
       <div class="grid">${favs.map(attractionCard).join("")}</div>
     </section>` : ""}
   `;
   bindCards();
+  $("#fav-share")?.addEventListener("click", copyFavsLink);
+}
+
+/* Счётчик по-русски: 1 место, 2 места, 5 мест. */
+function plural(n, forms) {
+  const n10 = n % 10, n100 = n % 100;
+  if (n10 === 1 && n100 !== 11) return forms[0];
+  if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return forms[1];
+  return forms[2];
+}
+
+/* Ссылка на избранное (#/favs?f=id1,id2): получатель за один тап
+   добавляет эти места к своему избранному. Ссылка только добавляет —
+   своё избранное она не трогает. */
+function copyFavsLink() {
+  const url = FavsLink.favsUrl([...state.favs], location.origin, location.pathname);
+  if (!url) { toast("В избранном пока пусто"); return; }
+  const done = () => toast("🔗 Ссылка на избранное скопирована");
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(url).then(done, () => fallbackCopy(url, done));
+  else fallbackCopy(url, done);
+}
+
+/* Вхождение по ссылке #/favs?f=…: добавляем узнаваемые id к своему
+   избранному и уводим на главную, где оно и отображается. */
+function importFavsFromQuery(query) {
+  const known = state.attractions.map(a => a.id);
+  const ids = FavsLink.parseFavsQuery(query, known);
+  const added = ids.filter(id => !state.favs.has(id));
+  if (added.length) {
+    for (const id of added) state.favs.add(id);
+    saveFavs();
+  }
+  history.replaceState(null, "", location.pathname + "#/");
+  if (added.length) {
+    toast(`❤ Из ссылки добавлено в избранное: ${added.length} ${plural(added.length, ["место", "места", "мест"])}`);
+  } else if (ids.length) {
+    toast("Эти места уже в вашем избранном");
+  }
+  route();
 }
 
 /* ---------------- catalog ---------------- */
@@ -1113,6 +1156,11 @@ function route() {
     renderQuiz();
   }
   else if (path === "news") renderNews();
+  else if (path === "favs") {
+    // Временный маршрут: импорт избранного из ссылки и уход на главную.
+    importFavsFromQuery(rawQuery);
+    return;
+  }
   else renderHome();
   state._lastRoute = navPath;
   announce(ROUTE_TITLES[navPath] || "Крым.Гид");

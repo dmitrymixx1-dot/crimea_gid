@@ -3,23 +3,43 @@
 Каждое место в каталоге — набор тегов, сезонность, бюджет, длительность
 и способ добраться. Ответы квиза конвертируем в баллы и сортируем.
 """
+
 from .load import get_attractions
 
 TAGS = {
-    "beach": "пляжи", "nature": "природа", "history": "история",
-    "culture": "дворцы и музеи", "food": "гастрономия", "wine": "вино",
-    "active": "активный отдых", "extreme": "экстрим и дайвинг",
-    "family": "с детьми", "photo": "фотогении",
-    "spa": "спа и грязели", "city": "набережные и города", "view": "панорамы",
-    "free": "бесплатно", "romance": "для двоих",
+    "beach": "пляжи",
+    "nature": "природа",
+    "history": "история",
+    "culture": "дворцы и музеи",
+    "food": "гастрономия",
+    "wine": "вино",
+    "active": "активный отдых",
+    "extreme": "экстрим и дайвинг",
+    "family": "с детьми",
+    "photo": "фотогении",
+    "spa": "спа и грязели",
+    "city": "набережные и города",
+    "view": "панорамы",
+    "free": "бесплатно",
+    "romance": "для двоих",
 }
 
 TAG_EMOJI = {
-    "beach": "🏖️", "nature": "🌿", "history": "🏛️", "culture": "🖼️",
-    "food": "🍽️", "wine": "🍷", "active": "🥾", "extreme": "🤿",
+    "beach": "🏖️",
+    "nature": "🌿",
+    "history": "🏛️",
+    "culture": "🖼️",
+    "food": "🍽️",
+    "wine": "🍷",
+    "active": "🥾",
+    "extreme": "🤿",
     "family": "👨‍‍👧",
-    "photo": "📸", "spa": "🧖", "city": "🏙️", "view": "🌄",
-    "free": "🆓", "romance": "💞",
+    "photo": "📸",
+    "spa": "🧖",
+    "city": "🏙️",
+    "view": "🌄",
+    "free": "🆓",
+    "romance": "💞",
 }
 
 TYPE_META = {
@@ -159,8 +179,11 @@ AREA_LABEL = {
 }
 
 SEASON_LABEL = {
-    "summer": "летом", "spring": "весной", "autumn": "осенью",
-    "winter": "зимой", "any": "в любое время года",
+    "summer": "летом",
+    "spring": "весной",
+    "autumn": "осенью",
+    "winter": "зимой",
+    "any": "в любое время года",
 }
 
 
@@ -208,13 +231,15 @@ def plan_itinerary(recs: list[dict], duration_key: str) -> dict:
             for t in s.get("tags", []):
                 tag_counts[t] = tag_counts.get(t, 0) + 1
         top_tags = [t for t, _ in sorted(tag_counts.items(), key=lambda kv: -kv[1])][:2]
-        days.append({
-            "day": d,
-            "area": area,
-            "area_label": AREA_LABEL.get(area, area),
-            "tags": top_tags,
-            "stops": stops,
-        })
+        days.append(
+            {
+                "day": d,
+                "area": area,
+                "area_label": AREA_LABEL.get(area, area),
+                "tags": top_tags,
+                "stops": stops,
+            }
+        )
 
     reserve = [it for v in by_area.values() for it in v]
     return {"days": days, "reserve": reserve, "n_days": n_days}
@@ -266,8 +291,10 @@ def _score_attraction(a: dict, ans: dict) -> tuple[float, list[str]]:
     hours = a.get("duration_h", 3)
     if tempo == "active" and hours <= 4:
         score += 0.5
-    if tempo == "relax" and hours >= 3 and (
-        "beach" in a["tags"] or "spa" in a["tags"] or "nature" in a["tags"]
+    if (
+        tempo == "relax"
+        and hours >= 3
+        and ("beach" in a["tags"] or "spa" in a["tags"] or "nature" in a["tags"])
     ):
         score += 0.5
         reasons.append("Тихий и неспешный отдых")
@@ -277,7 +304,7 @@ def _score_attraction(a: dict, ans: dict) -> tuple[float, list[str]]:
         score -= 3.0
 
     # 7) Популярность — небольшой бонус.
-    score += (a.get("rating", 4.0) - 4.0)
+    score += a.get("rating", 4.0) - 4.0
 
     return score, reasons
 
@@ -301,11 +328,20 @@ def evaluate(answers: dict, news_items: list[dict] | None = None) -> dict:
         if score >= 2.5:
             fallback = {"emoji": "📍", "label": a["type"], "img": "cat_nature.jpg"}
             meta = TYPE_META.get(a["type"], fallback)
-            scored.append((score, {**a, "type_meta": meta, "score": round(score, 1),
-                                    "reasons": reasons}))
+            scored.append(
+                (
+                    score,
+                    {
+                        **a,
+                        "type_meta": meta,
+                        "score": round(score, 1),
+                        "reasons": reasons,
+                    },
+                )
+            )
     scored.sort(key=lambda x: x[0], reverse=True)
 
-    top = scored[:DAYS_BY_DURATION.get(answers["duration"], 8)]
+    top = scored[: DAYS_BY_DURATION.get(answers["duration"], 8)]
 
     # Профиль по основному интересу.
     profile = PROFILES.get(answers["purpose"][0], PROFILES["beach"])
@@ -329,7 +365,7 @@ def evaluate(answers: dict, news_items: list[dict] | None = None) -> dict:
         "смело включайте в маршрут пещеры, мысы и узкие горные дороги."
         if answers["transport"] == "car"
         else "🚌 Без машины ориентируйтесь на курортные города с разветвлённой "
-             "сетью маршруток и электричек: Ялта, Евпатория, Судак, Керчь, Феодосия."
+        "сетью маршруток и электричек: Ялта, Евпатория, Судак, Керчь, Феодосия."
     )
 
     return {

@@ -10,6 +10,7 @@
 Тем самым ломающее изменение в любом звене — порядок полей ссылки,
 контракт `QuizIn`, планировщик — валит именно этот файл.
 """
+
 import json
 import re
 import shutil
@@ -56,18 +57,30 @@ def parse_plan_param(value: str) -> dict | None:
 # Три сценария из чек-листа бета-тестирования в README.
 SCENARIOS = {
     "пляж/пара/лето": {
-        "purpose": ["beach", "romance"], "season": "summer", "tempo": "relax",
-        "budget": "comfort", "party": "couple", "duration": "3-5",
+        "purpose": ["beach", "romance"],
+        "season": "summer",
+        "tempo": "relax",
+        "budget": "comfort",
+        "party": "couple",
+        "duration": "3-5",
         "transport": "car",
     },
     "вино/осень/без машины": {
-        "purpose": ["wine", "food"], "season": "autumn", "tempo": "medium",
-        "budget": "comfort", "party": "friends", "duration": "1-2",
+        "purpose": ["wine", "food"],
+        "season": "autumn",
+        "tempo": "medium",
+        "budget": "comfort",
+        "party": "friends",
+        "duration": "1-2",
         "transport": "transit",
     },
     "с детьми/экономия": {
-        "purpose": ["family", "free"], "season": "summer", "tempo": "medium",
-        "budget": "economy", "party": "family", "duration": "6-10",
+        "purpose": ["family", "free"],
+        "season": "summer",
+        "tempo": "medium",
+        "budget": "economy",
+        "party": "family",
+        "duration": "6-10",
         "transport": "car",
     },
 }
@@ -105,8 +118,9 @@ def test_quiz_to_plan_to_link_roundtrip(client, name):
     second = client.post("/api/quiz/evaluate", json=restored)
     assert second.status_code == 200
     again = second.json()
-    assert [a["id"] for a in again["recommendations"]] == \
-           [a["id"] for a in result["recommendations"]], f"{name}: выдача поехала"
+    assert [a["id"] for a in again["recommendations"]] == [
+        a["id"] for a in result["recommendations"]
+    ], f"{name}: выдача поехала"
 
 
 @pytest.mark.parametrize("name", list(SCENARIOS))
@@ -116,8 +130,9 @@ def test_plan_days_are_actually_walkable(client, name):
     result = client.post("/api/quiz/evaluate", json=SCENARIOS[name]).json()
     for day in result["itinerary"]["days"]:
         stops = day["stops"]
-        assert 1 <= len(stops) <= 3, \
+        assert 1 <= len(stops) <= 3, (
             f"{name}, день {day['day']}: {len(stops)} остановок"
+        )
         assert len({s["area"] for s in stops}) == 1, "день скачет между районами"
         assert day["area_label"], name
         hours = sum(s["duration_h"] for s in stops)
@@ -142,7 +157,7 @@ def test_broken_share_link_degrades_to_422_not_500(client):
     for junk in ("", "beach~summer", "~".join(["мусор"] * 7)):
         parsed = parse_plan_param(junk)
         if parsed is None:
-            continue                      # фронт даже не отправит такое
+            continue  # фронт даже не отправит такое
         r = client.post("/api/quiz/evaluate", json=parsed)
         assert r.status_code == 422, junk
 
@@ -179,10 +194,19 @@ def test_offline_shell_has_everything_the_scenarios_need(client):
     """Смоук PWA: всё, что нужно сценариям выше, лежит в precache SW."""
     sw = (STATIC_DIR / "sw.js").read_text(encoding="utf-8")
     shell = set(re.findall(r'"(/[^"]*)"', sw))
-    assert {"/", "/static/app.js", "/static/plan-link.js",
-            "/static/catalog-link.js", "/static/style.css"} <= shell
-    for path in ("/static/app.js", "/static/plan-link.js",
-                 "/static/catalog-link.js", "/static/style.css"):
+    assert {
+        "/",
+        "/static/app.js",
+        "/static/plan-link.js",
+        "/static/catalog-link.js",
+        "/static/style.css",
+    } <= shell
+    for path in (
+        "/static/app.js",
+        "/static/plan-link.js",
+        "/static/catalog-link.js",
+        "/static/style.css",
+    ):
         assert client.get(path).status_code == 200, path
     assert client.get("/sw.js").headers["Service-Worker-Allowed"] == "/"
 
@@ -204,14 +228,16 @@ def test_python_twin_matches_the_real_frontend_module():
     результат, что настоящий static/plan-link.js в Node."""
     answers = SCENARIOS["вино/осень/без машины"]
     script = (
-        f'const P = require({str(STATIC_DIR / "plan-link.js")!r});'
-        f'const a = {json.dumps(answers)};'
-        'const s = P.buildPlanString(a);'
-        'process.stdout.write(JSON.stringify([s, P.parsePlanParam(s)]));'
+        f"const P = require({str(STATIC_DIR / 'plan-link.js')!r});"
+        f"const a = {json.dumps(answers)};"
+        "const s = P.buildPlanString(a);"
+        "process.stdout.write(JSON.stringify([s, P.parsePlanParam(s)]));"
     )
     out = subprocess.run(  # noqa: S603
         [shutil.which("node"), "-e", script],
-        capture_output=True, text=True, check=True,
+        capture_output=True,
+        text=True,
+        check=True,
     ).stdout
     js_string, js_parsed = json.loads(out)
     assert js_string == build_plan_string(answers)

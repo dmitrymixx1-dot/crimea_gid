@@ -5,6 +5,7 @@
 офлайн-снимок ``news_snapshot.json`` — фронт помечает это бейджем
 «офлайн / демо-данные».
 """
+
 import asyncio
 import calendar
 import html
@@ -25,30 +26,93 @@ from .load import get_snapshot, get_sources
 # даём 2 очка релевантности.
 # --------------------------------------------------------------------------
 CRIMEA_WORDS = {
-    "крым", "крыма", "крыме", "крымский", "крымская", "крымское", "крымчан",
-    "севастополь", "севастополя", "севастополе", "севастопольский",
-    "симферополь", "симферополя", "симферополе", "симферопольский",
-    "керчь", "керчи", "керченский", "керченская",
-    "ялта", "ялты", "ялте", "ялтинский", "ялтинской",
-    "феодосия", "феодосии", "феодосийский",
-    "судак", "судака", "судаке", "судакский", "судакской",
-    "евпатория", "евпатории", "евпаторийский",
-    "алушта", "алушты", "алуште", "алуштинский",
-    "алупка", "алупки", "алупке",
-    "гурзуф", "гурзуфа", "гурзуфе",
-    "гаспра", "ореанда", "ореанды", "ореанде",
-    "форос", "фороса", "форосе",
-    "массандра", "массандры", "массандре",
-    "коктебель", "коктебеля", "коктебельский",
-    "бахчисарай", "бахчисарая", "бахчисарае", "бахчисарайский",
-    "черноморское", "черноморский", "демерджи",
-    "инкерман", "инкермана", "инкермане",
-    "мисхор", "мисхора", "мисхоре",
-    "херсонес", "херсонеса", "херсонесе",
+    "крым",
+    "крыма",
+    "крыме",
+    "крымский",
+    "крымская",
+    "крымское",
+    "крымчан",
+    "севастополь",
+    "севастополя",
+    "севастополе",
+    "севастопольский",
+    "симферополь",
+    "симферополя",
+    "симферополе",
+    "симферопольский",
+    "керчь",
+    "керчи",
+    "керченский",
+    "керченская",
+    "ялта",
+    "ялты",
+    "ялте",
+    "ялтинский",
+    "ялтинской",
+    "феодосия",
+    "феодосии",
+    "феодосийский",
+    "судак",
+    "судака",
+    "судаке",
+    "судакский",
+    "судакской",
+    "евпатория",
+    "евпатории",
+    "евпаторийский",
+    "алушта",
+    "алушты",
+    "алуште",
+    "алуштинский",
+    "алупка",
+    "алупки",
+    "алупке",
+    "гурзуф",
+    "гурзуфа",
+    "гурзуфе",
+    "гаспра",
+    "ореанда",
+    "ореанды",
+    "ореанде",
+    "форос",
+    "фороса",
+    "форосе",
+    "массандра",
+    "массандры",
+    "массандре",
+    "коктебель",
+    "коктебеля",
+    "коктебельский",
+    "бахчисарай",
+    "бахчисарая",
+    "бахчисарае",
+    "бахчисарайский",
+    "черноморское",
+    "черноморский",
+    "демерджи",
+    "инкерман",
+    "инкермана",
+    "инкермане",
+    "мисхор",
+    "мисхора",
+    "мисхоре",
+    "херсонес",
+    "херсонеса",
+    "херсонесе",
     "старокрымск",  # подстрока: Старокрымск(ий/ая/ом)
-    "сарыч", "капчак", "лазурное", "миндальное",
-    "джанкой", "белогорск", "нижнегорск", "красноперекопск",
-    "перевальное", "санаторное", "сакский", "сасык",
+    "сарыч",
+    "капчак",
+    "лазурное",
+    "миндальное",
+    "джанкой",
+    "белогорск",
+    "нижнегорск",
+    "красноперекопск",
+    "перевальное",
+    "санаторное",
+    "сакский",
+    "сасык",
 }
 
 # «крым*» по токенам (чтобы не ловить «криминал»).
@@ -59,26 +123,58 @@ _HYPHEN_WORDS = {"ай-петри", "айпетри", "ай-дамир", "бел
 # Правила классификации тем (идут в порядке приоритета).
 # --------------------------------------------------------------------------
 TOPIC_RULES = [
-    ("safety", re.compile(
-        r"предупрежд|опасн|эвакуац|мчс|штраф за|контроль|установили запр", re.I)),
-    ("transport", re.compile(
-        r"мост|паром|переправ|поезд|электричк|самол|аэропорт|автобус|"
-        r"маршрутк|пробк|дорож|трасс|ремонт|движение|рейс|перевозк", re.I)),
-    ("beach", re.compile(
-        r"пляж|купан|купальный|море|волн|шторм|бу(е|и)|отдых|турист|сезон", re.I)),
-    ("weather", re.compile(
-        r"погод|дожд|ветер|жара|океан|градус|температур|осадк|солнц", re.I)),
-    ("nature", re.compile(
-        r"заповедник|гора|пещер|водопад|мыс|ущель|скал|лес|природ", re.I)),
-    ("events", re.compile(
-        r"фестиваль|праздник|ярмарк|концерт|откры(ли|тие|лась|ло)|старт|"
-        r"завершил|закрыли|мастер-класс|спецпрограмм|фестив", re.I)),
-    ("food", re.compile(
-        r"вин|винодел|фермер|рынок|гастроном|кухн|сыр|десерт|импорт "
-        r"продуктов|продукт|дегустац|конкурс", re.I)),
-    ("history", re.compile(
-        r"археолог|музей|дворец|крепост|истори|реставрац|памятн|"
-        r"экспозиц|раскопк|монумент", re.I)),
+    (
+        "safety",
+        re.compile(
+            r"предупрежд|опасн|эвакуац|мчс|штраф за|контроль|установили запр", re.I
+        ),
+    ),
+    (
+        "transport",
+        re.compile(
+            r"мост|паром|переправ|поезд|электричк|самол|аэропорт|автобус|"
+            r"маршрутк|пробк|дорож|трасс|ремонт|движение|рейс|перевозк",
+            re.I,
+        ),
+    ),
+    (
+        "beach",
+        re.compile(
+            r"пляж|купан|купальный|море|волн|шторм|бу(е|и)|отдых|турист|сезон", re.I
+        ),
+    ),
+    (
+        "weather",
+        re.compile(r"погод|дожд|ветер|жара|океан|градус|температур|осадк|солнц", re.I),
+    ),
+    (
+        "nature",
+        re.compile(r"заповедник|гора|пещер|водопад|мыс|ущель|скал|лес|природ", re.I),
+    ),
+    (
+        "events",
+        re.compile(
+            r"фестиваль|праздник|ярмарк|концерт|откры(ли|тие|лась|ло)|старт|"
+            r"завершил|закрыли|мастер-класс|спецпрограмм|фестив",
+            re.I,
+        ),
+    ),
+    (
+        "food",
+        re.compile(
+            r"вин|винодел|фермер|рынок|гастроном|кухн|сыр|десерт|импорт "
+            r"продуктов|продукт|дегустац|конкурс",
+            re.I,
+        ),
+    ),
+    (
+        "history",
+        re.compile(
+            r"археолог|музей|дворец|крепост|истори|реставрац|памятн|"
+            r"экспозиц|раскопк|монумент",
+            re.I,
+        ),
+    ),
 ]
 
 
@@ -102,10 +198,11 @@ def parse_telegram_page(page_html: str, channel: str) -> list[dict]:
         m_time = re.search(r'<time datetime="([^"]+)"', chunk)
         m_link = re.search(
             r'href="(?:https?://t\.me/)?/?' + re.escape(channel) + r'\?before=(\d+)"',
-            chunk)
+            chunk,
+        )
         m_text = re.search(
-            r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>',
-            chunk, re.S)
+            r'<div class="tgme_widget_message_text[^"]*"[^>]*>(.*?)</div>', chunk, re.S
+        )
         if not m_text:
             continue
         text = re.sub(r"<br\s*/?>", " ", m_text.group(1))
@@ -113,13 +210,19 @@ def parse_telegram_page(page_html: str, channel: str) -> list[dict]:
         text = html.unescape(re.sub(r"\s+", " ", text)).strip()
         if len(text) < 10:  # пустые посты / картинки без подписи
             continue
-        link = f"https://t.me/{channel}/{m_link.group(1)}" if m_link else f"https://t.me/{channel}"
-        items.append({
-            "title": text[:100] + ("…" if len(text) > 100 else ""),
-            "link": link,
-            "summary": text[:300],
-            "published": m_time.group(1) if m_time else "",
-        })
+        link = (
+            f"https://t.me/{channel}/{m_link.group(1)}"
+            if m_link
+            else f"https://t.me/{channel}"
+        )
+        items.append(
+            {
+                "title": text[:100] + ("…" if len(text) > 100 else ""),
+                "link": link,
+                "summary": text[:300],
+                "published": m_time.group(1) if m_time else "",
+            }
+        )
         if len(items) >= 20:
             break
     return items
@@ -177,12 +280,15 @@ class NewsService:
         try:
             config.NEWS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
             config.NEWS_CACHE_FILE.write_text(
-                json.dumps({
-                    "ts": self._cache["ts"],
-                    "online": self._cache["online"],
-                    "failed": self._cache["failed"],
-                    "items": self._cache["items"],
-                }, ensure_ascii=False),
+                json.dumps(
+                    {
+                        "ts": self._cache["ts"],
+                        "online": self._cache["online"],
+                        "failed": self._cache["failed"],
+                        "items": self._cache["items"],
+                    },
+                    ensure_ascii=False,
+                ),
                 encoding="utf-8",
             )
         # Не смогли сохранить кэш (ro-диск и т.п.) — лента всё равно отдаётся.
@@ -193,8 +299,7 @@ class NewsService:
     async def _fetch_feed(self, client: httpx.AsyncClient, src: dict) -> list[dict]:
         if src.get("type") == "telegram":
             channel = src["url"].rsplit("/", 1)[-1].strip()
-            resp = await client.get(
-                f"https://t.me/s/{channel}", follow_redirects=True)
+            resp = await client.get(f"https://t.me/s/{channel}", follow_redirects=True)
             resp.raise_for_status()
             items = parse_telegram_page(resp.text, channel)
             if not items:
@@ -213,17 +318,23 @@ class NewsService:
                 continue
             published = ""
             if entry.get("published_parsed"):
-                published = datetime.fromtimestamp(
-                    calendar.timegm(entry["published_parsed"]), tz=UTC
-                ).astimezone().isoformat()
+                published = (
+                    datetime.fromtimestamp(
+                        calendar.timegm(entry["published_parsed"]), tz=UTC
+                    )
+                    .astimezone()
+                    .isoformat()
+                )
             elif entry.get("published"):
                 published = entry["published"]
-            items.append({
-                "title": title,
-                "link": entry.get("link", src["url"]),
-                "summary": _clean_text(entry.get("summary", "")),
-                "published": published,
-            })
+            items.append(
+                {
+                    "title": title,
+                    "link": entry.get("link", src["url"]),
+                    "summary": _clean_text(entry.get("summary", "")),
+                    "published": published,
+                }
+            )
         return items
 
     # ------------------------------------------------------------------- rank
@@ -231,10 +342,8 @@ class NewsService:
         seen: dict[str, dict] = {}
         for it in items:
             it = dict(it)
-            it["crimea_score"] = crimea_score(
-                f"{it['title']} {it.get('summary', '')}")
-            it["topics"] = match_topics(
-                f"{it['title']} {it.get('summary', '')}")
+            it["crimea_score"] = crimea_score(f"{it['title']} {it.get('summary', '')}")
+            it["topics"] = match_topics(f"{it['title']} {it.get('summary', '')}")
             key = re.sub(r"\W+", " ", it["title"].lower()).strip()[:80]
             if key in seen:
                 # Дубликаты: оставляем то, что раньше по дате.

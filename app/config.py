@@ -3,6 +3,7 @@
 Всё, что вынесено в переменные окружения, можно переопределить
 без правки кода: PORT, NEWS_CACHE_TTL, NEWS_HTTP_TIMEOUT, WEATHER_TTL.
 """
+
 import os
 from pathlib import Path
 
@@ -28,8 +29,7 @@ OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
 # Заголовок должен быть ASCII (httpx кодирует header'ы ascii/latin-1).
 USER_AGENT = (
-    "CrimeaGuideBot/1.0 "
-    "(tourism news aggregator for Crimea; FastAPI + feedparser)"
+    "CrimeaGuideBot/1.0 (tourism news aggregator for Crimea; FastAPI + feedparser)"
 )
 
 # Публичный origin сайта для Open Graph / Twitter Card (og:url, og:image
@@ -56,4 +56,4 @@ CSP = (
     f"frame-ancestors {CSP_FRAME_ANCESTORS}"
 )
 
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"

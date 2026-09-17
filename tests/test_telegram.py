@@ -45,10 +45,14 @@ def test_telegram_parser_empty_page():
 
 def test_telegram_source_flows_into_pipeline():
     svc = NewsService()
-    svc._sources = [{
-        "id": "tg1", "name": "Тестовый канал",
-        "url": "https://t.me/s/testchannel", "type": "telegram",
-    }]
+    svc._sources = [
+        {
+            "id": "tg1",
+            "name": "Тестовый канал",
+            "url": "https://t.me/s/testchannel",
+            "type": "telegram",
+        }
+    ]
     svc._cache = {"ts": 0.0, "online": False, "items": [], "failed": []}
 
     async def fake(client, src):
@@ -64,6 +68,7 @@ def test_telegram_source_flows_into_pipeline():
 
 def test_sources_mixed_types_load():
     from app.services.load import get_sources
+
     sources = get_sources()
     types = {s["type"] for s in sources}
     assert {"rss", "telegram"} <= types
