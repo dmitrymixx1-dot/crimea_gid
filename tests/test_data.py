@@ -265,7 +265,12 @@ def test_schedule_rules_are_well_formed():
             close_min = _minutes(r["to"])
             assert open_min < close_min, f"{a['id']}: {r['from']}–{r['to']}"
             assert set(r.get("closed", [])) <= days, a["id"]
-            assert set(r) <= {"months", "from", "to", "closed"}, set(r)
+            for key in ("firstDay", "lastDay"):
+                if key in r:
+                    assert isinstance(r[key], int) and 1 <= r[key] <= 31, \
+                        f"{a['id']}: {key}={r[key]!r}"
+            assert set(r) <= {"months", "from", "to", "closed",
+                              "firstDay", "lastDay"}, set(r)
 
 
 def test_schedule_covers_every_month():
@@ -295,6 +300,71 @@ def test_schedule_times_appear_in_the_human_text():
                 variants = {stamp, stamp.lstrip("0")}
                 assert variants & {v for v in variants if v in text}, \
                     f"{a['id']}: {stamp} из schedule нет в hours «{a['hours']}»"
+
+
+MONTH_GENITIVE = {
+    1: "января", 2: "февраля", 3: "марта", 4: "апреля", 5: "мая", 6: "июня",
+    7: "июля", 8: "августа", 9: "сентября", 10: "октября", 11: "ноября",
+    12: "декабря",
+}
+_DAYS_IN_MONTH = {1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30, 7: 31, 8: 31,
+                  9: 30, 10: 31, 11: 30, 12: 31}
+_GEN = "|".join(MONTH_GENITIVE.values())
+_DAY_MONTH = re.compile(rf"\b(\d{{1,2}})\s+({_GEN})\b")
+_MONTH_DAY = re.compile(rf"\b({_GEN})\s+(\d{{1,2}})\b")
+
+
+def _text_boundaries(text: str) -> set[tuple[int, int]]:
+    """Пары (месяц, число) вида «16 июня» / «15 октября» из текста hours."""
+    found: set[tuple[int, int]] = set()
+    for m in _DAY_MONTH.finditer(text):
+        day, month = int(m.group(1)), next(
+            k for k, v in MONTH_GENITIVE.items() if v == m.group(2))
+        if 1 <= day <= 31:
+            found.add((month, day))
+    for m in _MONTH_DAY.finditer(text):
+        day, month = int(m.group(2)), next(
+            k for k, v in MONTH_GENITIVE.items() if v == m.group(1))
+        if 1 <= day <= 31:
+            found.add((month, day))
+    return found
+
+
+def _struct_boundaries(rules: list[dict]) -> set[tuple[int, int]]:
+    """Дневные границы из schedule: (месяц, число) для firstDay/lastDay."""
+    out: set[tuple[int, int]] = set()
+    for r in rules:
+        start, end = (int(x) for x in r["months"].split("-"))
+        if "firstDay" in r:
+            out.add((start, r["firstDay"]))
+        if "lastDay" in r and r["lastDay"] < _DAYS_IN_MONTH[end]:
+            out.add((end, r["lastDay"]))
+    return out
+
+
+def test_schedule_day_boundaries_match_the_human_text():
+    """Дневные границы schedule и «16 июня»-детали в hours обязаны
+    совпадать — по тому же правилу, что и времена. Исключение: старт
+    окна может быть неявным, как день после конца соседнего окна в том
+    же месяце («16 июня–15 октября» + зимнее окно с 16 октября)."""
+    for a in get_attractions():
+        rules = a.get("schedule")
+        if rules is None:
+            continue
+        in_text = _text_boundaries(a["hours"])
+        in_struct = _struct_boundaries(rules)
+        for month, day in in_text:
+            assert (month, day) in in_struct, (
+                f"{a['id']}: «{day} {MONTH_GENITIVE[month]}» в hours, "
+                f"но нет границы в schedule")
+        for month, day in in_struct:
+            if (month, day) in in_text:
+                continue
+            adjacent = any(
+                m2 == month and abs(d2 - day) == 1 for m2, d2 in in_struct)
+            assert adjacent, (
+                f"{a['id']}: граница {day} {MONTH_GENITIVE[month]} в "
+                f"schedule не отражена в hours и не граничит с окном")
 
 
 def _minutes(hhmm: str) -> int:
