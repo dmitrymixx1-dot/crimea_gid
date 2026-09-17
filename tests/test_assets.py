@@ -398,3 +398,86 @@ def test_hourly_precip_hint_lives_in_the_module():
     block = app[app.index("function hourlyStrip") : app.index("function weatherStrip")]
     assert ">=" not in block.replace("h.precipLabel ?", "")  # порог не дублируется
     assert "PRECIP_HINT" in read("hourly.js")
+
+
+# ---------------- интерактивная карта (фаза 1.5) ----------------
+
+
+def test_leaflet_module_is_umd_and_wired():
+    """Leaflet-обёртка — UMD-модуль в том же стиле, что и остальные,
+    подключён в каркас и закэширован в оболочке PWA. Сам Leaflet
+    (vendor/leaflet.js, vendor/leaflet.css) тоже в прекэше — мы не
+    хотим тянуть его с CDN ради строгой CSP 'self'."""
+    src = read("leaflet-map.js")
+    assert "module.exports" in src and "root.LeafletMap" in src
+    sw = read("sw.js")
+    assert '"/static/leaflet-map.js"' in sw
+    assert '"/static/vendor/leaflet.js"' in sw
+    assert '"/static/vendor/leaflet.css"' in sw
+    html = read("index.html")
+    assert 'src="/static/leaflet-map.js"' in html
+    assert "/static/vendor/leaflet.css" not in html  # стили грузит модуль лениво
+
+
+def test_leaflet_vendor_files_are_present_locally():
+    """Никаких CDN в src/href: всё для интерактивной карты лежит в
+    static/vendor/ и раздаётся с нашего хоста (CSP img/connect-src
+    разрешает только тайлы OSM по https)."""
+    vendor = STATIC_DIR / "vendor"
+    assert (vendor / "leaflet.js").exists(), "leaflet.js не скачан"
+    assert (vendor / "leaflet.css").exists(), "leaflet.css не скачан"
+    # Иконки маркеров Leaflet — из /static/vendor/images/, а не CDN.
+    css = (vendor / "leaflet.css").read_text("utf-8")
+    assert "url(/static/vendor/images/" in css, "пути к картинкам не поправлены"
+    assert "unpkg.com" not in css and "jsdelivr" not in css and "cdnjs" not in css
+
+
+def test_svg_map_is_default_leaflet_is_opt_in():
+    """Родная SVG-схема — дефолт: работает без сети, не тянет тайлы.
+    Интерактивный слой включается явно кнопкой. На случай неудачной
+    загрузки Leaflet есть фолбэк на SVG."""
+    app = read("app.js")
+    assert 'mapLayer: "svg"' in app, "дефолтный слой — SVG"
+    assert "switchMapLayer" in app
+    assert "map-interactive" in app
+    # Кнопка переключения — две кнопки: «Схема» и «Спутник/карта».
+    assert 'data-layer="svg"' in app
+    assert 'data-layer="leaflet"' in app
+    # Leaflet не импортируется в глобальный скоуп каркаса (не растит
+    # холодную загрузку на ~160 Кб): модуль подгружается при переключении.
+    assert "/static/vendor/leaflet.js" not in read("index.html")
+
+
+def test_csp_allows_osm_tiles_only_when_needed():
+    """Политика разрешает тайлы OpenStreetMap для img-src и connect-src,
+    но не открывает другие внешние хосты и не ослабляет script-src."""
+    from app.config import CSP
+
+    assert "script-src 'self'" in CSP, "script-src не должен ослабляться"
+    assert "https://tile.openstreetmap.org" in CSP
+    # OSM только в картинках и коннектах, а не в скриптах/стилях/фреймах.
+    assert CSP.count("https://tile.openstreetmap.org") == 2
+    # Внешних шрифтов/iframe-ов не появилось.
+    assert "font-src 'self'" in CSP
+    assert "object-src 'none'" in CSP
+
+
+def test_leaflet_layer_recreates_markers_on_filter():
+    """Маркеры Leaflet обязаны обновляться синхронно с фильтром по тегам
+    и показом/скрытием маршрута плана — как это делает SVG-слой."""
+    src = read("leaflet-map.js")
+    assert "markers.clearLayers" in src, "старые маркеры не чистятся"
+    assert "planLayer.clearLayers" in src, "план не перерисовывается"
+    assert "options.showPlan" in src and "options.planStops" in src
+    app = read("app.js")
+    assert "LeafletMap.createOrUpdate" in app
+    assert "state.mapShowPlan" in app  # флаг плана общий для обоих слоёв
+
+
+def test_leaflet_failure_falls_back_to_svg():
+    """Если загрузка тайлов или инициализация Leaflet сорвалась —
+    пользователь возвращается на SVG-схему, а не видит пустой квадрат."""
+    app = read("app.js")
+    assert "catch(err" in app  # ошибка загрузки ловится
+    assert 'switchMapLayer("svg")' in app  # откат на схему
+    assert "Не удалось загрузить интерактивную карту" in app
