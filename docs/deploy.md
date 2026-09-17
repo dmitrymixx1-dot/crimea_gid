@@ -90,19 +90,19 @@ Workflow [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)
 выкатывает релиз без ручного доступа к серверу:
 
 ```
-git tag v1.10.0 && git push --tags
+git tag v1.10.1 && git push --tags
         │
         ▼  GitHub Actions
   preflight: ruff + pytest + node --test          (тег с красными тестами не едет)
         ▼
   репетиция: deploy.sh --dry-run                  (ref, состав, версия в коде)
         ▼  ssh (ключ из секретов)
-  deploy/deploy.sh v1.10.0 на сервере:
+  deploy/deploy.sh v1.10.1 на сервере:
     git fetch --tags && git checkout --detach <тег>
     проверка: APP_VERSION в коде == имени тега
     docker compose up -d --build
     ждём healthy (до 5 минут)
-    сверяем /api/health → версия == 1.10.0
+    сверяем /api/health → версия == 1.10.1
     docker image prune -f
 ```
 
@@ -119,7 +119,7 @@ Deploy → Run workflow**, в поле `ref` — тег, ветку или ко�
 нужно катить. Поэтому у скрипта есть репетиция:
 
 ```bash
-./deploy/deploy.sh --dry-run v1.10.0                 # план выката тега
+./deploy/deploy.sh --dry-run v1.10.1                 # план выката тега
 DRY_RUN=1 APP_DIR=$PWD ./deploy/deploy.sh HEAD      # то же для текущего HEAD
 ```
 

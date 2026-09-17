@@ -860,6 +860,7 @@ function renderQuiz() {
   const q = qs[idx];
   const ans = state.q.answers[q.id];
   const isMulti = q.type === "multi";
+  const isLast = idx === qs.length - 1;
   const options = q.options.map(o => {
     const sel = isMulti ? (ans || []).includes(o.id) : ans === o.id;
     return `
@@ -883,7 +884,7 @@ function renderQuiz() {
         <div class="quiz-nav">
           <button class="btn btn-outline btn-sm" id="q-back" ${idx === 0 ? "disabled" : ""}>← Назад</button>
           <span class="quiz-step">${idx + 1} / ${qs.length}</span>
-          ${isMulti ? `<button class="btn btn-primary btn-sm" id="q-next" ${!(ans || []).length ? "disabled" : ""}>Далее →</button>` : ""}
+          ${isMulti || isLast ? `<button class="btn btn-primary btn-sm" id="q-next" ${!(ans || []).length ? "disabled" : ""}>Далее →</button>` : ""}
         </div>
       </div>
     </div>`;
@@ -897,14 +898,18 @@ function renderQuiz() {
       state.q.answers[q.id] = [...cur];
     } else {
       state.q.answers[q.id] = id;
-      setTimeout(() => { state.q.step++; renderQuiz(); }, 180);
+      if (!isLast) state.q.step++;
+      renderQuiz();
       return;
     }
     renderQuiz();
   }));
   const back = $("#q-back"), next = $("#q-next");
   if (back) back.addEventListener("click", () => { state.q.step--; renderQuiz(); });
-  if (next) next.addEventListener("click", submitQuiz);
+  if (next) next.addEventListener("click", () => {
+    if (isLast) submitQuiz();
+    else { state.q.step++; renderQuiz(); }
+  });
   localize();
 }
 
@@ -1402,6 +1407,7 @@ const TYPE_COLORS = {
 };
 
 function renderMap() {
+  if (typeof LeafletMap !== "undefined") LeafletMap.destroy($("#lm-interactive"));
   const typeBtns = Object.keys(state.meta.tags).map(t => `
     <button class="chip-btn ${state.f.tag === t ? "active" : ""}" data-tag="${t}">${tagLabel(t)}</button>`).join("");
   const hasPlan = !!state.quizResult;
@@ -1491,7 +1497,9 @@ function switchMapLayer(layer) {
   });
   if (note) note.textContent = t("загружаем карту…");
   drawMap()
-    .then(() => { if (note) note.textContent = t("интерактивная карта · тайлы OpenStreetMap"); })
+    .then(() => {
+      if (note && state.mapLayer === "leaflet") note.textContent = t("интерактивная карта · тайлы OpenStreetMap");
+    })
     .catch(err => {
       console.warn("Leaflet failed:", err);
       toast(t("Не удалось загрузить интерактивную карту — остаёмся на схеме"));
@@ -1506,18 +1514,30 @@ function drawMap() {
     `${MAP.px(lng).toFixed(1)},${MAP.py(lat).toFixed(1)}`).join(" ");
   const items = state.attractions.filter(
     a => !state.f.tag || a.tags.includes(state.f.tag));
+  const stops = state.mapShowPlan && state.quizResult
+    ? state.quizResult.itinerary.days.flatMap(d => d.stops) : [];
+  const offsets = MapLayout.offsets(items.concat(stops), 32,
+    a => ({ x: MAP.px(a.lng), y: MAP.py(a.lat) }));
+  const position = a => {
+    const offset = offsets.get(a.id);
+    return { x: MAP.px(a.lng) + offset.x, y: MAP.py(a.lat) + offset.y };
+  };
 
   /* --- SVG-схема (всегда рисуем, даже если сейчас активен Leaflet —
      она просто скрыта через display:none, и при неудачной загрузке
      интерактивного слоя пользователь сразу видит знакомый вид). --- */
   if (svg) {
+    const leaders = items.filter(a => offsets.get(a.id).moved).map(a =>
+      `<line x1="${MAP.px(a.lng)}" y1="${MAP.py(a.lat)}"
+        x2="${position(a).x}" y2="${position(a).y}"
+        stroke="#64748b" stroke-width="1.5" pointer-events="none"/>`).join("");
     const markers = items.map(a => {
       const meta = state.meta.types[a.type] || { emoji: "📍" };
       const color = TYPE_COLORS[a.type] || "#64748b";
       const fav = state.favs.has(a.id) ? ' class="fav-ring"' : "";
       return `<g class="marker" data-id="${a.id}" tabindex="0" role="button"
           aria-label="${esc(t("{name} — открыть карточку", { name: a.name }))}"
-          transform="translate(${MAP.px(a.lng).toFixed(1)},${MAP.py(a.lat).toFixed(1)})">
+          transform="translate(${position(a).x.toFixed(1)},${position(a).y.toFixed(1)})">
         <title>${esc(a.name)} — ${esc(a.region)}</title>
         <circle${fav} r="14" fill="none" stroke="#e0475b" stroke-width="2" opacity="${state.favs.has(a.id) ? 1 : 0}"/>
         <circle r="11" fill="${color}" stroke="#fff" stroke-width="2"/>
@@ -1527,12 +1547,11 @@ function drawMap() {
 
     let planLayer = "";
     if (state.mapShowPlan && state.quizResult) {
-      const stops = state.quizResult.itinerary.days.flatMap(d => d.stops);
       planLayer = `
         <polyline points="${stops.map(s =>
           `${MAP.px(s.lng).toFixed(1)},${MAP.py(s.lat).toFixed(1)}`).join(" ")}"
           fill="none" stroke="#f5a524" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.9"/>
-        ${stops.map((s, i) => `<g transform="translate(${MAP.px(s.lng).toFixed(1)},${MAP.py(s.lat).toFixed(1)})" pointer-events="none">
+        ${stops.map((s, i) => `<g transform="translate(${position(s).x.toFixed(1)},${position(s).y.toFixed(1)})" pointer-events="none">
           <circle r="8" fill="#f5a524" stroke="#fff" stroke-width="2"/>
           <text y="3.5" text-anchor="middle" font-size="9" font-weight="700" fill="#3a2a05">${i + 1}</text>
         </g>`).join("")}`;
@@ -1555,6 +1574,7 @@ function drawMap() {
       <text class="sea-label small" x="352" y="20">материк</text>
       ${MAP.cities.map(([n, lng, lat]) =>
         `<text class="city-label" x="${MAP.px(lng).toFixed(1)}" y="${MAP.py(lat).toFixed(1)}">${n}</text>`).join("")}
+      ${leaders}
       ${markers}
       <g id="plan-layer">${planLayer}</g>`;
 
@@ -1580,15 +1600,15 @@ function drawMap() {
 
   /* --- Интерактивный слой: поднимаем только когда включён --- */
   if (state.mapLayer === "leaflet" && lm && typeof LeafletMap !== "undefined") {
-    const planStops = state.mapShowPlan && state.quizResult
-      ? state.quizResult.itinerary.days.flatMap(d => d.stops)
-      : [];
     return LeafletMap.createOrUpdate(lm, items, openModal, {
       showPlan: state.mapShowPlan,
-      planStops: planStops,
+      planStops: stops,
       typesMeta: state.meta.types,
     }).catch(err => {
-      throw err;
+      if (!lm.isConnected || state.mapLayer !== "leaflet") return;
+      console.warn("Leaflet failed:", err);
+      toast(t("Не удалось загрузить интерактивную карту — остаёмся на схеме"));
+      switchMapLayer("svg");
     });
   }
   return Promise.resolve();
@@ -1618,6 +1638,9 @@ function route() {
   // Уходим с каталога — снимаем наблюдатель догрузки: его «часовой»
   // сейчас исчезнет вместе с разметкой.
   if (navPath !== "catalog") { catObserver?.disconnect(); catObserver = null; }
+  if (navPath !== "map" && typeof LeafletMap !== "undefined") {
+    LeafletMap.destroy($("#lm-interactive"));
+  }
   $$(".nav a").forEach(a => {
     const active = a.dataset.nav === navPath;
     a.classList.toggle("active", active);

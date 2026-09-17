@@ -27,6 +27,8 @@ jobs:
       - name: JS syntax check
         run: |
           node --check static/app.js
+          node --check static/map-layout.js
+          node --check static/leaflet-map.js
           node --check static/i18n.js
           node --check static/plan-link.js
           node --check static/catalog-link.js
