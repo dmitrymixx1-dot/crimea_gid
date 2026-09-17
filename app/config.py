@@ -56,4 +56,4 @@ CSP = (
     f"frame-ancestors {CSP_FRAME_ANCESTORS}"
 )
 
-APP_VERSION = "0.12.0"
+APP_VERSION = "1.1.0"

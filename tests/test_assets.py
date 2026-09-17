@@ -128,3 +128,154 @@ def test_sw_shell_covers_umd_modules():
 def test_catalog_link_module_is_umd():
     src = read("catalog-link.js")
     assert "module.exports" in src and "root.CatalogLink" in src
+
+
+# ---------------- деплой-конфигурация (фаза 1.0) ----------------
+
+def test_compose_serves_app_behind_caddy():
+    """docker-compose.yml — прод-схема: приложение наружу не торчит,
+    HTTPS терминирует Caddy, кэш ленты лежит в именованном томе."""
+    import yaml
+    root = STATIC_DIR.parent
+    compose = yaml.safe_load((root / "docker-compose.yml").read_text("utf-8"))
+    app_svc, caddy = compose["services"]["app"], compose["services"]["caddy"]
+    # Приложение доступно только внутри compose-сети.
+    assert "ports" not in app_svc, "app не должен публиковать порт наружу"
+    assert "8000" in app_svc["expose"]
+    assert any("80:80" in p for p in caddy["ports"])
+    assert any("443:443" in p for p in caddy["ports"])
+    # Кэш и сертификаты переживают пересоздание контейнеров.
+    assert {"news-cache", "caddy-data"} <= set(compose["volumes"])
+    assert any("/srv/cache" in v for v in app_svc["volumes"])
+
+
+def test_compose_requires_domain_and_acme_email():
+    """Без домена и почты ACME деплой обязан падать сразу,
+    а не выпускать сертификат на пустую строку."""
+    root = STATIC_DIR.parent
+    compose = (root / "docker-compose.yml").read_text("utf-8")
+    assert "${DOMAIN:?" in compose
+    assert "${ACME_EMAIL:?" in compose
+    env = (root / ".env.example").read_text("utf-8")
+    assert "DOMAIN=" in env and "ACME_EMAIL=" in env
+
+
+def test_caddyfile_proxies_with_forwarded_headers():
+    """og:url собирается из X-Forwarded-*, когда SITE_ORIGIN пуст —
+    прокси обязан их передавать."""
+    caddy = (STATIC_DIR.parent / "deploy" / "Caddyfile").read_text("utf-8")
+    assert "reverse_proxy app:8000" in caddy
+    assert "X-Forwarded-Proto" in caddy and "X-Forwarded-Host" in caddy
+    assert "/api/health" in caddy          # проверка живости бэкенда
+    assert "Strict-Transport-Security" in caddy
+    # Service worker не должен залипать в кэше прокси.
+    assert "/sw.js" in caddy and "no-cache" in caddy
+
+
+def test_env_secrets_are_not_committed():
+    root = STATIC_DIR.parent
+    assert not (root / ".env").exists(), ".env не место в репозитории"
+    assert ".env" in (root / ".gitignore").read_text("utf-8")
+    assert ".env" in (root / ".dockerignore").read_text("utf-8")
+
+
+def test_backup_scripts_are_executable_and_sane():
+    import os
+    deploy = STATIC_DIR.parent / "deploy"
+    for name in ("backup-cache.sh", "restore-cache.sh"):
+        path = deploy / name
+        assert path.exists(), name
+        assert os.access(path, os.X_OK), f"{name}: нет бита исполнения"
+        src = path.read_text("utf-8")
+        assert src.startswith("#!/usr/bin/env bash"), name
+        assert "set -euo pipefail" in src, name
+        assert "/srv/cache" in src, name
+
+
+# ---------------- порционный показ каталога (фаза 1.1) ----------------
+
+def test_catalog_page_module_is_umd_and_precached():
+    src = read("catalog-page.js")
+    assert "module.exports" in src and "root.CatalogPage" in src
+    assert '"/static/catalog-page.js"' in read("sw.js")
+    assert 'src="/static/catalog-page.js"' in read("index.html")
+
+
+def test_catalog_renders_a_first_page_not_the_whole_list():
+    """60 карточек одним куском — дорогой первый рендер на слабом
+    телефоне. Сетка обязана рисовать порцию и догружать остальное."""
+    app = read("app.js")
+    assert "CatalogPage.firstPage" in app
+    assert "CatalogPage.visible" in app
+    # Кнопка догрузки — доступный путь без скролла и фолбэк для
+    # браузеров без IntersectionObserver.
+    assert "cat-more-btn" in app
+    assert "IntersectionObserver" in app
+    assert 'typeof IntersectionObserver === "undefined"' in app
+
+
+def test_catalog_observer_is_disconnected_on_route_change():
+    """«Часовой» исчезает вместе с разметкой каталога — наблюдатель
+    обязан отключаться, иначе он утекает между маршрутами."""
+    app = read("app.js")
+    assert app.count("catObserver?.disconnect()") >= 2
+
+
+def test_catalog_paging_state_is_not_shared_by_link():
+    """Ссылка на подборку несёт фильтры, но не «докрученность»:
+    получатель должен увидеть ту же выборку с начала."""
+    assert "catShown" not in read("catalog-link.js")
+    src = read("catalog-page.js")
+    assert "buildCatalogQuery" not in src
+
+
+def test_bind_cards_is_idempotent_for_paged_rendering():
+    """Каталог догружается порциями и зовёт bindCards поверх уже
+    связанных карточек. Без защиты избранное получило бы второй
+    listener и переключалось бы дважды, то есть никак."""
+    app = read("app.js")
+    assert "data-bound" in app, "нет защиты от повторной привязки"
+    assert "[data-fav]:not([data-bound])" in app
+    assert ".card[data-id]:not([data-bound])" in app
+
+
+def test_paged_catalog_appends_instead_of_full_repaint():
+    """Догрузка дорисовывает порцию: полный перерендер съел бы весь
+    выигрыш и сбрасывал бы фокус с кнопки."""
+    app = read("app.js")
+    assert "insertAdjacentHTML" in app
+    assert "appendCatCards" in app
+
+
+# ---------------- «открыто сейчас» (фаза 1.1) ----------------
+
+def test_open_now_module_is_umd_and_wired():
+    src = read("open-now.js")
+    assert "module.exports" in src and "root.OpenNow" in src
+    assert '"/static/open-now.js"' in read("sw.js")
+    assert 'src="/static/open-now.js"' in read("index.html")
+
+
+def test_open_now_uses_crimea_time_not_device_time():
+    """Турист из Екатеринбурга должен видеть про ялтинский музей то же,
+    что турист в Ялте: считаем в UTC+3, а не в поясе устройства."""
+    src = read("open-now.js")
+    assert "TZ_OFFSET_MIN = 3 * 60" in src
+    assert "getTimezoneOffset" in src
+
+
+def test_open_now_filter_keeps_places_without_schedule():
+    """Пляж и мыс открыты всегда. Прятать их по кнопке «открыто сейчас»
+    было бы враньём — фильтр убирает только заведомо закрытое."""
+    src = read("open-now.js")
+    assert "return !s.known || s.open;" in src
+    app = read("app.js")
+    assert "OpenNow.filterOpen" in app
+
+
+def test_catalog_open_filter_has_a_disclaimer():
+    """Расписание огрублено до месяца — интерфейс обязан это признавать."""
+    app = read("app.js")
+    assert "cat-open" in app
+    assert 'aria-pressed="${state.f.open}"' in app
+    assert "уточняйте на месте" in app

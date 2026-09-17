@@ -30,7 +30,7 @@ const state = {
   areas: [],
   quiz: null,
   news: null,
-  f: { q: "", area: "", tag: "", sort: "rating" },
+  f: { q: "", area: "", tag: "", sort: "rating", open: false },
   q: { step: 0, answers: {} },
   quizResult: null,
   newsView: { topic: "all", onlyCrimea: true, q: "" },
@@ -39,7 +39,14 @@ const state = {
   planAutoDone: false,
   weather: null,
   mapShowPlan: false,
+  // Порционный показ каталога: текущая подборка и сколько карточек
+  // из неё уже нарисовано (см. static/catalog-page.js).
+  catItems: [],
+  catShown: 0,
 };
+
+// Наблюдатель догрузки живёт вне state: это ресурс DOM, а не данные.
+let catObserver = null;
 
 /* ---------------- favorites ---------------- */
 function loadFavs() {
@@ -120,6 +127,7 @@ function attractionCard(a) {
   const meta = state.meta.types[a.type] || { emoji: "📍", img: "cat_nature.jpg", label: a.type };
   const chips = a.tags.slice(0, 3)
     .map(t => `<span class="chip">${tagLabel(t)}</span>`).join("");
+  const openLabel = OpenNow.label(a);
   return `
     <article class="card" data-id="${a.id}">
       <div class="card-img">
@@ -138,6 +146,7 @@ function attractionCard(a) {
           <span>${budgetIcons(a.budget)}</span>
           <span>⏱ ${a.duration_h} ч</span>
         </div>
+        ${openLabel ? `<div class="open-now">${esc(openLabel)}</div>` : ""}
       </div>
     </article>`;
 }
@@ -323,13 +332,25 @@ function renderCatalog(focusTag) {
           </select>
         </div>
         <div class="filter-row" id="cat-tags">${tagBtns}</div>
+        <div class="filter-row">
+          <button class="chip-btn ${state.f.open ? "active" : ""}" id="cat-open"
+            aria-pressed="${state.f.open}"
+            title="Показать то, что работает прямо сейчас (время крымское)">
+            🕘 Открыто сейчас</button>
+          ${state.f.open ? `<span class="muted open-note">Расписание сезонное — уточняйте на месте</span>` : ""}
+        </div>
       </div>
       <div class="grid" id="cat-grid"></div>
+      <div class="cat-more" id="cat-more"></div>
     </div>`;
   $("#cat-search").addEventListener("input", e => { state.f.q = e.target.value; renderCatGrid(); syncCatalogUrl(); });
   $("#cat-area").addEventListener("change", e => { state.f.area = e.target.value; renderCatGrid(); syncCatalogUrl(); });
   $("#cat-sort").addEventListener("change", e => { state.f.sort = e.target.value; renderCatGrid(); syncCatalogUrl(); });
   $("#cat-share").addEventListener("click", copyCatalogLink);
+  $("#cat-open").addEventListener("click", () => {
+    state.f.open = !state.f.open;
+    renderCatalog();          // перерисовываем: у кнопки меняется подпись
+  });
   $$("#cat-tags .chip-btn").forEach(b => b.addEventListener("click", () => {
     state.f.tag = state.f.tag === b.dataset.tag ? "" : b.dataset.tag;
     renderCatalog(b.dataset.tag);  // перерисовка + новый URL + возврат фокуса
@@ -346,10 +367,13 @@ function renderCatGrid() {
   const grid = $("#cat-grid");
   if (!grid) return;
   const q = state.f.q.toLowerCase();
-  const items = state.attractions.filter(a =>
+  let items = state.attractions.filter(a =>
     (!state.f.area || a.area === state.f.area) &&
     (!state.f.tag || a.tags.includes(state.f.tag)) &&
     (!q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)));
+  // «Открыто сейчас» прячет только заведомо закрытое: у пляжей и мысов
+  // расписания нет, и выбрасывать их было бы враньём (см. open-now.js).
+  if (state.f.open) items = OpenNow.filterOpen(items);
   const SORTS = {
     rating: (a, b) => b.rating - a.rating,
     name: (a, b) => a.name.localeCompare(b.name, "ru"),
@@ -357,11 +381,83 @@ function renderCatGrid() {
     budget: (a, b) => a.budget - b.budget,
   };
   items.sort(SORTS[state.f.sort] || SORTS.rating);
-  grid.innerHTML = items.length
-    ? items.map(attractionCard).join("")
-    : `<div class="empty" style="grid-column:1/-1"><div class="big">🔍</div>Ничего не нашлось. Попробуйте убрать фильтры.</div>`;
-  $("#cat-count").textContent = `Найдено: ${items.length}`;
+  // Новая подборка — показываем с начала: иначе после смены фильтра
+  // пользователь видел бы «докрученный» хвост предыдущей выдачи.
+  state.catShown = CatalogPage.firstPage(items.length);
+  state.catItems = items;
+  paintCatGrid();
+}
+
+/* Рисует подборку с нуля: смена фильтра, сортировки или входа по ссылке. */
+function paintCatGrid() {
+  const grid = $("#cat-grid");
+  if (!grid) return;
+  const items = state.catItems || [];
+  if (!items.length) {
+    grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="big">🔍</div>Ничего не нашлось. Попробуйте убрать фильтры.</div>`;
+    $("#cat-count").textContent = CatalogPage.statusLabel(0, 0);
+    setCatMore(0);
+    return;
+  }
+  grid.innerHTML = CatalogPage.visible(items, state.catShown)
+    .map(attractionCard).join("");
+  updateCatTail(grid);
+}
+
+/* Дорисовывает следующую порцию, не трогая уже отрисованные карточки:
+   перерендер всей сетки съел бы весь выигрыш и сбрасывал бы фокус. */
+function appendCatCards(from) {
+  const grid = $("#cat-grid");
+  if (!grid) return;
+  const items = state.catItems || [];
+  const chunk = CatalogPage.visible(items, state.catShown).slice(from);
+  if (chunk.length) {
+    grid.insertAdjacentHTML("beforeend", chunk.map(attractionCard).join(""));
+  }
+  updateCatTail(grid);
+}
+
+/* Общий хвост обоих путей: счётчик, обработчики карточек, кнопка догрузки. */
+function updateCatTail(grid) {
+  const total = (state.catItems || []).length;
+  $("#cat-count").textContent = CatalogPage.statusLabel(state.catShown, total);
   bindCards(grid);
+  setCatMore(CatalogPage.remaining(state.catShown, total));
+}
+
+/* Хвост под сеткой: кнопка «Показать ещё» + невидимый «часовой», по
+   которому IntersectionObserver догружает порцию при прокрутке.
+   Кнопка не декоративная — это доступный путь без скролла и фолбэк
+   для браузеров без IntersectionObserver. */
+function setCatMore(left) {
+  const box = $("#cat-more");
+  if (!box) return;
+  catObserver?.disconnect();
+  if (!left) { box.innerHTML = ""; return; }
+  const step = Math.min(left, CatalogPage.PAGE);
+  box.innerHTML = `
+    <button class="btn btn-outline" id="cat-more-btn">
+      Показать ещё ${step} из ${left}
+    </button>
+    <div id="cat-sentinel" aria-hidden="true"></div>`;
+  $("#cat-more-btn").addEventListener("click", showMoreCards);
+  const sentinel = $("#cat-sentinel");
+  if (typeof IntersectionObserver === "undefined" || !sentinel) return;
+  catObserver = new IntersectionObserver(entries => {
+    if (entries.some(e => e.isIntersecting)) showMoreCards();
+  }, { rootMargin: "400px" });   // догружаем до того, как упрёмся в край
+  catObserver.observe(sentinel);
+}
+
+function showMoreCards() {
+  const total = (state.catItems || []).length;
+  if (!CatalogPage.hasMore(state.catShown, total)) return;
+  const from = state.catShown;
+  state.catShown = CatalogPage.growShown(state.catShown, total);
+  appendCatCards(from);
+  // Фокус был на кнопке, которую мы только что перерисовали: вернём его,
+  // иначе клавиатурный пользователь после догрузки окажется в начале.
+  if (document.activeElement === document.body) $("#cat-more-btn")?.focus();
 }
 
 /* ---------------- quiz ---------------- */
@@ -714,18 +810,28 @@ function trapModalTab(e) {
   else if (!e.shiftKey && active === last) { e.preventDefault(); first.focus(); }
 }
 
+/* Навешивает обработчики на карточки. Идемпотентна: каталог догружается
+   порциями и вызывает её повторно поверх уже связанных карточек —
+   помечаем обработанные через data-bound, иначе избранное получило бы
+   второй listener и переключалось бы дважды (то есть никак). */
 function bindCards(root = view) {
-  $$("[data-fav]", root).forEach(b => b.addEventListener("click", e => {
-    e.stopPropagation();
-    toggleFav(b.dataset.fav);
-  }));
+  $$("[data-fav]:not([data-bound])", root).forEach(b => {
+    b.dataset.bound = "1";
+    b.addEventListener("click", e => {
+      e.stopPropagation();
+      toggleFav(b.dataset.fav);
+    });
+  });
   // Клик по карточке открывает модалку; клик по внутренней ссылке
   // (#/place/<id>) оставляет переход роутеру — так работает и клавиатура.
-  $$(".card[data-id], .rec-row[data-id]", root).forEach(el =>
-    el.addEventListener("click", e => {
-      if (e.target.closest("a")) return;
-      openModal(el.dataset.id);
-    }));
+  $$(".card[data-id]:not([data-bound]), .rec-row[data-id]:not([data-bound])", root)
+    .forEach(el => {
+      el.dataset.bound = "1";
+      el.addEventListener("click", e => {
+        if (e.target.closest("a")) return;
+        openModal(el.dataset.id);
+      });
+    });
 }
 
 function openModal(id) {
@@ -751,6 +857,8 @@ function openModal(id) {
             <div class="fact"><span class="k">Бюджет</span>${budgetIcons(a.budget)} · ${esc(a.price_hint)}</div>
             <div class="fact"><span class="k">Длительность</span>≈ ${a.duration_h} ч</div>
             <div class="fact"><span class="k">Рейтинг</span><span class="star" aria-hidden="true">★</span> ${a.rating.toFixed(1)} / 5</div>
+            ${a.hours ? `<div class="fact fact-wide"><span class="k">Часы работы</span>🕘 ${esc(a.hours)}
+              ${OpenNow.label(a) ? `<div class="open-now">${esc(OpenNow.label(a))}</div>` : ""}</div>` : ""}
           </div>
           <div class="card-chips">${a.tags.map(t => `<span class="chip">${tagLabel(t)}</span>`).join("")}</div>
           <div class="tip">💡 ${esc(a.tips)}</div>
@@ -970,6 +1078,9 @@ function hashParts() {
 function route() {
   const { path, query, rawQuery } = hashParts();
   const navPath = path.startsWith("place/") ? "catalog" : path;
+  // Уходим с каталога — снимаем наблюдатель догрузки: его «часовой»
+  // сейчас исчезнет вместе с разметкой.
+  if (navPath !== "catalog") { catObserver?.disconnect(); catObserver = null; }
   $$(".nav a").forEach(a => {
     const active = a.dataset.nav === navPath;
     a.classList.toggle("active", active);

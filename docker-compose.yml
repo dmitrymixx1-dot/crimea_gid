@@ -1,0 +1,57 @@
+# «Крым.Гид» — прод-развёртывание: приложение + Caddy (HTTPS автоматом).
+#
+#   cp .env.example .env && $EDITOR .env      # домен и почта для Let's Encrypt
+#   docker compose up -d
+#
+# Caddy сам получит и продлит сертификат по ACME — ключи и API-токены
+# не нужны, как и во всём остальном проекте.
+services:
+  app:
+    build: .
+    image: crimea-gid:latest
+    restart: unless-stopped
+    environment:
+      # Публичный origin для Open Graph: в превью мессенджеров ссылка
+      # должна раскрываться абсолютным адресом, а не адресом контейнера.
+      SITE_ORIGIN: "https://${DOMAIN:?укажите DOMAIN в .env}"
+      NEWS_CACHE_TTL: "${NEWS_CACHE_TTL:-900}"
+      WEATHER_TTL: "${WEATHER_TTL:-3600}"
+      CSP_FRAME_ANCESTORS: "${CSP_FRAME_ANCESTORS:-'self'}"
+    volumes:
+      # Файловый кэш ленты — он переживает рестарт и его же бэкапим.
+      - news-cache:/srv/cache
+    # Наружу порт не публикуем: единственная точка входа — Caddy.
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/api/health',timeout=3)"]
+      interval: 60s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      DOMAIN: "${DOMAIN:?укажите DOMAIN в .env}"
+      ACME_EMAIL: "${ACME_EMAIL:?укажите ACME_EMAIL в .env}"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Сертификаты: том обязателен, иначе при каждом пересоздании
+      # контейнера Let's Encrypt будет выдавать новые (есть rate limit).
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  news-cache:
+  caddy-data:
+  caddy-config:

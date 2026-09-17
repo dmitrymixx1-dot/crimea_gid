@@ -138,6 +138,13 @@ button { font: inherit; cursor: pointer; }
 
 /* ---------- cards grid ---------- */
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); gap: 18px; }
+/* Статус «открыто сейчас»: подпись в карточке и в модалке. */
+.open-now { font-size: 12.5px; margin-top: 8px; color: var(--muted); }
+.open-note { font-size: 12.5px; align-self: center; }
+/* Хвост каталога: кнопка догрузки и «часовой» для IntersectionObserver. */
+.cat-more { display: flex; justify-content: center; margin-top: 20px; }
+.cat-more:empty { margin-top: 0; }
+#cat-sentinel { width: 1px; height: 1px; }
 .card {
   background: var(--card); border-radius: var(--r); overflow: hidden;
   box-shadow: var(--shadow); display: flex; flex-direction: column;
@@ -394,6 +401,8 @@ button { font: inherit; cursor: pointer; }
 .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; margin: 16px 0; }
 .fact { font-size: 13.5px; }
 .fact .k { color: var(--muted); display: block; font-size: 12px; }
+/* Часы работы — длинная строка с сезонными оговорками, ей нужна вся ширина. */
+.fact-wide { grid-column: 1 / -1; }
 .tip {
   background: var(--sun-soft); border-radius: 12px; padding: 12px 14px;
   font-size: 13.5px; margin: 14px 0; border-left: 4px solid var(--sun);

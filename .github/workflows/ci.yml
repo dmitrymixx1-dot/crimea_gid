@@ -16,7 +16,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt pytest ruff
+          pip install -r requirements-dev.txt
       - name: Lint (ruff)
         run: ruff check app tests
       - name: JS syntax check
@@ -24,6 +24,8 @@ jobs:
           node --check static/app.js
           node --check static/plan-link.js
           node --check static/catalog-link.js
+          node --check static/catalog-page.js
+          node --check static/open-now.js
           node --check static/sw.js
       - name: JS unit tests
         run: node --test "tests/js/*.test.js"
@@ -37,3 +39,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build -t crimea-gid:ci .
+      - name: Validate compose stack
+        # Конфиг обязан собираться с заполненным .env и падать без него.
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+          rm .env
+          if docker compose config --quiet 2>/dev/null; then
+            echo "compose должен требовать DOMAIN/ACME_EMAIL" >&2
+            exit 1
+          fi

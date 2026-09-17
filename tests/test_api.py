@@ -320,3 +320,52 @@ def test_index_a11y_landmarks_and_live_regions(client):
     assert 'id="route-status" class="sr-only" role="status"' in html
     assert '<nav class="nav" aria-label="Основные разделы">' in html
     assert '<main id="view" class="wrap" tabindex="-1">' in html
+
+
+# ---------------- расширение каталога, фаза 1.0 ----------------
+
+def test_catalog_grew_to_sixty(client):
+    body = client.get("/api/attractions").json()
+    assert body["count"] >= 60
+
+
+def test_western_area_is_a_full_region_now(client):
+    """Западный Крым дорос до самостоятельного направления: на него
+    планировщик должен собирать полноценные дни, а не один заезд."""
+    body = client.get("/api/attractions?area="
+                      + urllib.parse.quote("Западный")).json()
+    assert body["count"] >= 15
+    ids = {a["id"] for a in body["items"]}
+    assert {"belyaus", "donuzlav", "sasyk-sivash", "kenasy",
+            "bakalskaya-kosa", "mezhvodnoe"} <= ids
+
+
+def test_attraction_detail_exposes_opening_hours(client):
+    body = client.get("/api/attractions/vorontsov").json()
+    assert "hours" in body and ":" in body["hours"]
+    # У природных точек графика нет — поле просто отсутствует.
+    assert "hours" not in client.get("/api/attractions/fiolent").json()
+
+
+def test_new_western_points_are_reachable_by_id(client):
+    for pid in ("belyaus", "donuzlav", "sasyk-sivash", "okunevka",
+                "krym-miniature", "kenasy", "mezhvodnoe", "bakalskaya-kosa"):
+        r = client.get(f"/api/attractions/{pid}")
+        assert r.status_code == 200, pid
+        body = r.json()
+        assert body["area"] == "Западный"
+        assert body["type_meta"]["img"], pid
+
+
+def test_quiz_plans_a_western_trip(client):
+    """Пляж + экстрим без машины на западе теперь даёт живой план."""
+    r = client.post("/api/quiz/evaluate", json={
+        "purpose": ["beach", "extreme"], "season": "summer", "tempo": "medium",
+        "budget": "economy", "party": "friends", "duration": "3-5",
+        "transport": "car",
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["itinerary"]["days"]
+    picked = {a["id"] for a in body["recommendations"]}
+    assert picked & {"belyaus", "donuzlav", "okunevka", "atlesh", "olenivka"}

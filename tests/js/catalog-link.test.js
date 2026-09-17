@@ -27,7 +27,7 @@ describe("catalog-link", () => {
   });
 
   it("round-trip: кириллица, пробелы, &, = и % выживают", () => {
-    const weird = { tag: "beach", area: "Южный", q: "мыс & пляж = 100% + ещё", sort: "time" };
+    const weird = { tag: "beach", area: "Южный", q: "мыс & пляж = 100% + ещё", sort: "time", open: false };
     const s = L.buildCatalogQuery(weird);
     assert.deepEqual(L.parseCatalogQuery(s), weird);
     // и после полного цикла через URL (как в браузере: hash -> URLSearchParams)
@@ -60,7 +60,22 @@ describe("catalog-link", () => {
   });
 
   it("KEYS/SORTS — контракт для app.js", () => {
-    assert.deepEqual(L.KEYS, ["tag", "area", "q", "sort"]);
+    assert.deepEqual(L.KEYS, ["tag", "area", "q", "sort", "open"]);
     assert.deepEqual(L.SORTS, ["rating", "name", "time", "budget"]);
+  });
+
+  it("фильтр «открыто сейчас» переживает ссылку", () => {
+    // Выключенный фильтр — дефолт, в ссылку не пишется.
+    assert.equal(L.buildCatalogQuery({ ...L.DEFAULTS, open: false }), "");
+    assert.equal(L.buildCatalogQuery({ open: true }), "open=1");
+    assert.equal(L.buildCatalogQuery({ tag: "wine", open: true }), "tag=wine&open=1");
+    // Round-trip: булево остаётся булевым, а не строкой "1".
+    assert.equal(L.parseCatalogQuery("open=1").open, true);
+    assert.equal(L.parseCatalogQuery("open=true").open, true);
+    assert.equal(L.parseCatalogQuery("open=0").open, false);
+    assert.equal(L.parseCatalogQuery("open=").open, false);
+    assert.equal(L.parseCatalogQuery("").open, false);
+    const f = { tag: "history", area: "Центральный", q: "", sort: "name", open: true };
+    assert.deepEqual(L.parseCatalogQuery(L.buildCatalogQuery(f)), f);
   });
 });
