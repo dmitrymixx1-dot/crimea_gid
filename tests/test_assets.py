@@ -10,7 +10,8 @@ import re
 from app.config import APP_VERSION, STATIC_DIR
 from app.services.load import get_attractions
 
-FRONT_FILES = ["index.html", "app.js", "plan-link.js", "catalog-link.js", "sw.js"]
+FRONT_FILES = ["index.html", "app.js", "plan-link.js", "catalog-link.js",
+               "favs-link.js", "sw.js"]
 
 BUDGET_HERO = 220_000     # байт
 BUDGET_CAT = 130_000
@@ -274,8 +275,35 @@ def test_open_now_filter_keeps_places_without_schedule():
 
 
 def test_catalog_open_filter_has_a_disclaimer():
-    """Расписание огрублено до месяца — интерфейс обязан это признавать."""
+    """В расписании то, что закодировать нельзя (санитарные дни,
+    непогода) — интерфейс обязан это признавать."""
     app = read("app.js")
     assert "cat-open" in app
     assert 'aria-pressed="${state.f.open}"' in app
     assert "уточняйте на месте" in app
+
+
+# ---------------- шаринг избранного (фаза 1.2) ----------------
+
+def test_favs_link_module_is_umd_and_wired():
+    src = read("favs-link.js")
+    assert "module.exports" in src and "root.FavsLink" in src
+    assert '"/static/favs-link.js"' in read("sw.js")
+    assert 'src="/static/favs-link.js"' in read("index.html")
+    app = read("app.js")
+    assert "FavsLink.favsUrl" in app
+    assert "FavsLink.parseFavsQuery" in app
+    # Кнопка шаринга есть только у непустого избранного.
+    assert 'id="fav-share"' in app
+
+
+def test_favs_link_imports_only_known_ids():
+    """Получатель обязан видеть только те id, что есть в его каталоге.
+    Импорт — однонаправленный (только add): своё избранное ссылка не
+    чистит; логика — в parseFavsQuery (JS-тесты), здесь фиксируем
+    место сверки с каталогом."""
+    src = read("favs-link.js")
+    assert "known.has(id)" in src
+    app = read("app.js")
+    assert "state.attractions.map(a => a.id)" in app
+    assert "state.favs.add(id)" in app

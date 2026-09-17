@@ -24,7 +24,8 @@ python3 -m venv .venv
 .venv/bin/python -m pytest tests/ -k weather -q    # по имени
 node --test "tests/js/*.test.js"            # JS-тесты шаринга плана и каталога
 node --check static/app.js && node --check static/plan-link.js \
-  && node --check static/catalog-link.js && node --check static/sw.js
+  && node --check static/catalog-link.js && node --check static/favs-link.js \
+  && node --check static/sw.js
 .venv/bin/ruff check app tests              # линтер
 ```
 
@@ -44,6 +45,7 @@ node --check static/app.js && node --check static/plan-link.js \
 | `test_weather.py` | WMO-коды, разбор ответа Open-Meteo, день недели, кэш, фильтр по городу, падение сети, `CITIES` (18 курортов, границы, совпадение с каталогом) |
 | `test_e2e_smoke.py` | сквозные сценарии: квиз → план → ссылка (3 профиля из чек-листа), выполнимость плана по дням, deep-link места, ссылка на подборку каталога, precache PWA, контракт `/api/health` |
 | `tests/js/catalog-link.test.js` | фильтры каталога ↔ URL: дефолты не пишутся, round-trip кириллицы/спецсимволов, откат мусорной сортировки, флаг `open=1` |
+| `tests/js/favs-link.test.js` | избранное ↔ URL: round-trip id, дубли и мусор, только id из каталога получателя, устойчивость к битому query |
 | `tests/js/catalog-page.test.js` | порционный показ: размер первой порции, шаг догрузки, сужение подборки фильтром, устойчивость к мусору |
 | `tests/js/open-now.test.js` | «открыто сейчас»: крымское время вне пояса устройства, дневные границы `firstDay`/`lastDay` (в т.ч. зимние диапазоны), сезоны через Новый год, границы окна, выходные дни, дата открытия в подписи вне сезона, битые правила |
 
@@ -70,7 +72,7 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 
 1. **test** — install deps (`requirements-dev.txt`) → `ruff check app tests` →
    `node --check` (`app.js`, `plan-link.js`, `catalog-link.js`,
-   `catalog-page.js`, `open-now.js`, `sw.js`) →
+   `catalog-page.js`, `open-now.js`, `favs-link.js`, `sw.js`) →
    `node --test "tests/js/*.test.js"` → `pytest -q`;
 2. **docker** — сборка образа и валидация compose-стека
    (`docker compose config` с `.env` и проверка, что без него конфиг падает).

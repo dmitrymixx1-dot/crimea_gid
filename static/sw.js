@@ -8,6 +8,7 @@ const SHELL = [
   "/static/catalog-link.js",
   "/static/catalog-page.js",
   "/static/open-now.js",
+  "/static/favs-link.js",
   "/static/app.js",
   "/static/manifest.webmanifest",
   "/static/img/hero.jpg",
