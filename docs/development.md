@@ -28,8 +28,8 @@ node --check static/app.js && node --check static/plan-link.js \
 .venv/bin/ruff check app tests              # линтер
 ```
 
-**192 Python-теста**, сеть не используется (все внешние вызовы заглушены),
-плюс **14 JS-тестов** (`tests/js/`, `node:test` без зависимостей):
+**206 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
+плюс **33 JS-теста** (`tests/js/`, `node:test` без зависимостей):
 
 | Модуль | Что покрывает |
 |---|---|
@@ -43,7 +43,9 @@ node --check static/app.js && node --check static/plan-link.js \
 | `test_telegram.py` | парсер `t.me/s/`, сквозной поток telegram-источника |
 | `test_weather.py` | WMO-коды, разбор ответа Open-Meteo, день недели, кэш, фильтр по городу, падение сети, `CITIES` (18 курортов, границы, совпадение с каталогом) |
 | `test_e2e_smoke.py` | сквозные сценарии: квиз → план → ссылка (3 профиля из чек-листа), выполнимость плана по дням, deep-link места, ссылка на подборку каталога, precache PWA, контракт `/api/health` |
-| `tests/js/catalog-link.test.js` | фильтры каталога ↔ URL: дефолты не пишутся, round-trip кириллицы/спецсимволов, откат мусорной сортировки |
+| `tests/js/catalog-link.test.js` | фильтры каталога ↔ URL: дефолты не пишутся, round-trip кириллицы/спецсимволов, откат мусорной сортировки, флаг `open=1` |
+| `tests/js/catalog-page.test.js` | порционный показ: размер первой порции, шаг догрузки, сужение подборки фильтром, устойчивость к мусору |
+| `tests/js/open-now.test.js` | «открыто сейчас»: крымское время вне пояса устройства, сезоны через Новый год, границы окна, выходные дни, битые правила |
 
 Соглашения:
 
@@ -67,7 +69,8 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 и на PR:
 
 1. **test** — install deps (`requirements-dev.txt`) → `ruff check app tests` →
-   `node --check` (`app.js`, `plan-link.js`, `catalog-link.js`, `sw.js`) →
+   `node --check` (`app.js`, `plan-link.js`, `catalog-link.js`,
+   `catalog-page.js`, `open-now.js`, `sw.js`) →
    `node --test "tests/js/*.test.js"` → `pytest -q`;
 2. **docker** — сборка образа и валидация compose-стека
    (`docker compose config` с `.env` и проверка, что без него конфиг падает).
@@ -88,7 +91,7 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 
 | Задача | Что править | Тесты |
 |---|---|---|
-| Новое место | объект в `app/data/attractions.json` (схема — [data.md](data.md#attractionsjson)); `hours` — только при стабильном расписании | авто: `test_data.py` |
+| Новое место | объект в `app/data/attractions.json` (схема — [data.md](data.md#attractionsjson)); `hours` — только при стабильном расписании, вместе с парным `schedule` | авто: `test_data.py` |
 | Новый RSS-источник | строка в `sources.json`, `"type": "rss"` | `test_data.py::test_sources_urls_unique` |
 | Новый TG-канал | строка в `sources.json`, `"type": "telegram"`, url `https://t.me/s/<канал>` (только публичные) | то же |
 | Новый город погоды | кортеж в `CITIES` (`app/services/weather.py`) | `test_weather.py` |

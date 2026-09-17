@@ -9,8 +9,11 @@
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
 
-  const DEFAULTS = { tag: "", area: "", q: "", sort: "rating" };
-  const KEYS = ["tag", "area", "q", "sort"];
+  // `open` — булев фильтр «открыто сейчас»: в ссылке живёт как open=1.
+  // Его значение зависит от момента открытия ссылки, поэтому получатель
+  // увидит свою выборку — это осознанно (делимся намерением, не срезом).
+  const DEFAULTS = { tag: "", area: "", q: "", sort: "rating", open: false };
+  const KEYS = ["tag", "area", "q", "sort", "open"];
   const SORTS = ["rating", "name", "time", "budget"];
 
   function decode(value) {
@@ -24,6 +27,10 @@
   function buildCatalogQuery(f) {
     const parts = [];
     for (const k of KEYS) {
+      if (k === "open") {
+        if (f && f.open) parts.push("open=1");
+        continue;
+      }
       const v = f && f[k] != null ? String(f[k]).trim() : "";
       if (v && v !== DEFAULTS[k]) parts.push(k + "=" + encodeURIComponent(v));
     }
@@ -39,6 +46,7 @@
       const i = chunk.indexOf("=");
       const k = i === -1 ? chunk : chunk.slice(0, i);
       const v = i === -1 ? "" : decode(chunk.slice(i + 1)).trim();
+      if (k === "open") { out.open = v === "1" || v === "true"; continue; }
       if (KEYS.includes(k) && v) out[k] = v;
     }
     if (!SORTS.includes(out.sort)) out.sort = DEFAULTS.sort;

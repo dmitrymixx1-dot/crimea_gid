@@ -24,6 +24,8 @@ jobs:
           node --check static/app.js
           node --check static/plan-link.js
           node --check static/catalog-link.js
+          node --check static/catalog-page.js
+          node --check static/open-now.js
           node --check static/sw.js
       - name: JS unit tests
         run: node --test "tests/js/*.test.js"

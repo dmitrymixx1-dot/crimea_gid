@@ -26,7 +26,7 @@ def test_attractions_schema():
     required = {"id", "name", "type", "region", "area", "description",
                 "tags", "season", "budget", "duration_h", "rating",
                 "price_hint", "tips", "access", "lat", "lng"}
-    optional = {"hours"}
+    optional = {"hours", "schedule"}
     for a in get_attractions():
         missing = required - set(a)
         assert not missing, f"{a.get('id')}: нет полей {missing}"
@@ -236,6 +236,75 @@ def test_hours_look_like_schedules():
         assert 5 <= len(hours) <= 200, f"{a['id']}: {len(hours)} символов"
         # В строке обязано быть время вида 9:00 / 18:00.
         assert re.search(r"\d{1,2}:\d{2}", hours), f"{a['id']}: {hours}"
+
+
+def test_schedule_accompanies_hours():
+    """`schedule` — машинная проекция `hours` для фильтра «открыто сейчас».
+    Одно без другого бессмысленно: текст без структуры не фильтруется,
+    структура без текста лишает человека точных оговорок."""
+    for a in get_attractions():
+        assert ("hours" in a) == ("schedule" in a), a["id"]
+
+
+def test_schedule_rules_are_well_formed():
+    """Правила должны разбираться тем же способом, что и в open-now.js."""
+    days = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+    for a in get_attractions():
+        rules = a.get("schedule")
+        if rules is None:
+            continue
+        assert isinstance(rules, list) and rules, a["id"]
+        for r in rules:
+            m = re.fullmatch(r"(\d{1,2})-(\d{1,2})", r["months"])
+            assert m, f"{a['id']}: months={r['months']}"
+            start, end = int(m.group(1)), int(m.group(2))
+            assert 1 <= start <= 12 and 1 <= end <= 12, a["id"]
+            for key in ("from", "to"):
+                assert re.fullmatch(r"\d{1,2}:\d{2}", r[key]), f"{a['id']}: {key}"
+            open_min = _minutes(r["from"])
+            close_min = _minutes(r["to"])
+            assert open_min < close_min, f"{a['id']}: {r['from']}–{r['to']}"
+            assert set(r.get("closed", [])) <= days, a["id"]
+            assert set(r) <= {"months", "from", "to", "closed"}, set(r)
+
+
+def test_schedule_covers_every_month():
+    """Дыра в месяцах означала бы «закрыто навсегда» в этот период —
+    чаще это забытое правило, чем реальная зимовка."""
+    for a in get_attractions():
+        rules = a.get("schedule")
+        if rules is None:
+            continue
+        for month in range(1, 13):
+            covered = any(_month_in_range(month, r["months"]) for r in rules)
+            assert covered, f"{a['id']}: месяц {month} не покрыт расписанием"
+
+
+def test_schedule_times_appear_in_the_human_text():
+    """Главный риск расхождения: поправили текст, забыли структуру
+    (или наоборот). Любое время из `schedule` обязано встречаться
+    в `hours` — иначе бейдж «открыто» противоречит карточке."""
+    for a in get_attractions():
+        rules = a.get("schedule")
+        if rules is None:
+            continue
+        text = a["hours"].replace("–", "-")
+        for rule in rules:
+            for key in ("from", "to"):
+                stamp = rule[key]
+                variants = {stamp, stamp.lstrip("0")}
+                assert variants & {v for v in variants if v in text}, \
+                    f"{a['id']}: {stamp} из schedule нет в hours «{a['hours']}»"
+
+
+def _minutes(hhmm: str) -> int:
+    hours, minutes = hhmm.split(":")
+    return int(hours) * 60 + int(minutes)
+
+
+def _month_in_range(month: int, spec: str) -> bool:
+    start, end = (int(x) for x in spec.split("-"))
+    return start <= month <= end if start <= end else (month >= start or month <= end)
 
 
 def test_price_hints_are_informative():

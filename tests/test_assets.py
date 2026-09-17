@@ -190,3 +190,92 @@ def test_backup_scripts_are_executable_and_sane():
         assert src.startswith("#!/usr/bin/env bash"), name
         assert "set -euo pipefail" in src, name
         assert "/srv/cache" in src, name
+
+
+# ---------------- порционный показ каталога (фаза 1.1) ----------------
+
+def test_catalog_page_module_is_umd_and_precached():
+    src = read("catalog-page.js")
+    assert "module.exports" in src and "root.CatalogPage" in src
+    assert '"/static/catalog-page.js"' in read("sw.js")
+    assert 'src="/static/catalog-page.js"' in read("index.html")
+
+
+def test_catalog_renders_a_first_page_not_the_whole_list():
+    """60 карточек одним куском — дорогой первый рендер на слабом
+    телефоне. Сетка обязана рисовать порцию и догружать остальное."""
+    app = read("app.js")
+    assert "CatalogPage.firstPage" in app
+    assert "CatalogPage.visible" in app
+    # Кнопка догрузки — доступный путь без скролла и фолбэк для
+    # браузеров без IntersectionObserver.
+    assert "cat-more-btn" in app
+    assert "IntersectionObserver" in app
+    assert 'typeof IntersectionObserver === "undefined"' in app
+
+
+def test_catalog_observer_is_disconnected_on_route_change():
+    """«Часовой» исчезает вместе с разметкой каталога — наблюдатель
+    обязан отключаться, иначе он утекает между маршрутами."""
+    app = read("app.js")
+    assert app.count("catObserver?.disconnect()") >= 2
+
+
+def test_catalog_paging_state_is_not_shared_by_link():
+    """Ссылка на подборку несёт фильтры, но не «докрученность»:
+    получатель должен увидеть ту же выборку с начала."""
+    assert "catShown" not in read("catalog-link.js")
+    src = read("catalog-page.js")
+    assert "buildCatalogQuery" not in src
+
+
+def test_bind_cards_is_idempotent_for_paged_rendering():
+    """Каталог догружается порциями и зовёт bindCards поверх уже
+    связанных карточек. Без защиты избранное получило бы второй
+    listener и переключалось бы дважды, то есть никак."""
+    app = read("app.js")
+    assert "data-bound" in app, "нет защиты от повторной привязки"
+    assert "[data-fav]:not([data-bound])" in app
+    assert ".card[data-id]:not([data-bound])" in app
+
+
+def test_paged_catalog_appends_instead_of_full_repaint():
+    """Догрузка дорисовывает порцию: полный перерендер съел бы весь
+    выигрыш и сбрасывал бы фокус с кнопки."""
+    app = read("app.js")
+    assert "insertAdjacentHTML" in app
+    assert "appendCatCards" in app
+
+
+# ---------------- «открыто сейчас» (фаза 1.1) ----------------
+
+def test_open_now_module_is_umd_and_wired():
+    src = read("open-now.js")
+    assert "module.exports" in src and "root.OpenNow" in src
+    assert '"/static/open-now.js"' in read("sw.js")
+    assert 'src="/static/open-now.js"' in read("index.html")
+
+
+def test_open_now_uses_crimea_time_not_device_time():
+    """Турист из Екатеринбурга должен видеть про ялтинский музей то же,
+    что турист в Ялте: считаем в UTC+3, а не в поясе устройства."""
+    src = read("open-now.js")
+    assert "TZ_OFFSET_MIN = 3 * 60" in src
+    assert "getTimezoneOffset" in src
+
+
+def test_open_now_filter_keeps_places_without_schedule():
+    """Пляж и мыс открыты всегда. Прятать их по кнопке «открыто сейчас»
+    было бы враньём — фильтр убирает только заведомо закрытое."""
+    src = read("open-now.js")
+    assert "return !s.known || s.open;" in src
+    app = read("app.js")
+    assert "OpenNow.filterOpen" in app
+
+
+def test_catalog_open_filter_has_a_disclaimer():
+    """Расписание огрублено до месяца — интерфейс обязан это признавать."""
+    app = read("app.js")
+    assert "cat-open" in app
+    assert 'aria-pressed="${state.f.open}"' in app
+    assert "уточняйте на месте" in app
