@@ -29,7 +29,7 @@ node --check static/app.js && node --check static/plan-link.js \
 .venv/bin/ruff check app tests              # линтер
 ```
 
-**209 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
+**272 Python-теста**, сеть не используется (все внешние вызовы заглушены),
 плюс **48 JS-тестов** (`tests/js/`, `node:test` без зависимостей):
 
 | Модуль | Что покрывает |
@@ -43,6 +43,7 @@ node --check static/app.js && node --check static/plan-link.js \
 | `test_news.py` | скоринг «Крым», темы, дедупликация, TTL и файл-кэш, офлайн-fallback, форма payload |
 | `test_telegram.py` | парсер `t.me/s/`, сквозной поток telegram-источника |
 | `test_weather.py` | WMO-коды, разбор ответа Open-Meteo, день недели, кэш, фильтр по городу, падение сети, `CITIES` (18 курортов, границы, совпадение с каталогом) |
+| `test_sea.py` | купальный индекс: пороги воды (23/20/16 °C) и волны (1,0/1,5 м), подписи волнения, вердикт по сырым значениям, разбор Open-Meteo Marine, мусор вместо чисел, кэш, фильтр по точке, сводка `warmest`, согласованность `SEA_POINTS` с `CITIES` (15 точек вынесены в море рядом со «своим» городом, у материковых курортов точек нет) |
 | `test_e2e_smoke.py` | сквозные сценарии: квиз → план → ссылка (3 профиля из чек-листа), выполнимость плана по дням, deep-link места, ссылка на подборку каталога, precache PWA, контракт `/api/health` |
 | `tests/js/catalog-link.test.js` | фильтры каталога ↔ URL: дефолты не пишутся, round-trip кириллицы/спецсимволов, откат мусорной сортировки, флаг `open=1` |
 | `tests/js/favs-link.test.js` | избранное ↔ URL: round-trip id, дубли и мусор, только id из каталога получателя, устойчивость к битому query |
@@ -100,6 +101,8 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 | Новый RSS-источник | строка в `sources.json`, `"type": "rss"` | `test_data.py::test_sources_urls_unique` |
 | Новый TG-канал | строка в `sources.json`, `"type": "telegram"`, url `https://t.me/s/<канал>` (только публичные) | то же |
 | Новый город погоды | кортеж в `CITIES` (`app/services/weather.py`) | `test_weather.py` |
+| Новая морская точка | кортеж в `SEA_POINTS` (`app/services/marine.py`), id — как у курорта в `CITIES`, координаты — в открытой воде в 1–8 км от города | `test_sea.py` |
+| Новый порог купального индекса | правила `verdict()` в `app/services/marine.py` (во фронте их дублировать нельзя) | `test_sea.py` |
 | Новый тег | `TAGS` + `TAG_EMOJI`, профиль в `PROFILES`, связь с лентой в `PURPOSE_TOPICS` (`recommend.py`) + вариант в `quiz.json` | `test_data.py`, `test_recommends.py` |
 | Новый тип места | `TYPE_META` в `recommend.py` + картинка в `static/img/` + цвет в `TYPE_COLORS` (`app.js`) | `test_data.py::test_type_meta_images_exist` |
 | Оптимизировать картинки | `pip install pillow && python tools/optimize_images.py` (бюджеты веса — в `test_assets.py` и в самом скрипте) | `test_assets.py::test_image_weight_budget` |

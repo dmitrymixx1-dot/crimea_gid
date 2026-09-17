@@ -323,3 +323,36 @@ def test_favs_link_imports_only_known_ids():
     app = read("app.js")
     assert "state.attractions.map(a => a.id)" in app
     assert "state.favs.add(id)" in app
+
+
+# ---------------- море и купальный индекс (фаза 1.3) ----------------
+
+
+def test_home_renders_sea_block_next_to_weather():
+    app = read("app.js")
+    assert "weatherStrip()" in app and "seaStrip()" in app
+    assert 'api("/api/sea")' in app, "морской блок нечем наполнять"
+
+
+def test_bathing_verdict_is_computed_server_side():
+    """Пороги купального индекса — в app/services/marine.py (там их
+    проверяет `test_sea.py`). Вторая копия правил во фронте означала бы
+    расхождение вердикта и данных, поэтому её здесь быть не должно."""
+    app = read("app.js")
+    assert "p.verdict.code" in app, "фронт обязан рисовать серверный вердикт"
+    for name in ("WAVE_DANGER", "WAVE_ROUGH", "TEMP_COMFORT"):
+        assert name not in app, f"{name}: правила продублированы во фронте"
+
+
+def test_sea_block_does_not_invent_missing_wave():
+    """Модель может отдать только температуру воды — волну не выдумываем."""
+    app = read("app.js")
+    assert "волна: нет данных" in app
+
+
+def test_sea_block_has_an_honest_disclaimer():
+    """Морская модель считает воду в открытом море: у берега может быть
+    иначе, и об этом надо сказать честно."""
+    app = read("app.js")
+    assert "морская модель" in app.lower()
+    assert "оборудованных пляжах" in app

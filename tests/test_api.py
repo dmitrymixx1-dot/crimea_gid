@@ -271,6 +271,79 @@ def test_weather_single_city_filter(client):
     assert [c["id"] for c in d["cities"]] == ["yalta"]
 
 
+# ---------------- море и купальный индекс (1.3.0) ----------------
+
+
+class _FakeSea:
+    """Заглушка морского сервиса: HTTP-тесты не ходят в сеть."""
+
+    def __init__(self, payload):
+        self.payload = payload
+        self.calls = []
+
+    async def get(self, city=None, refresh=False):
+        self.calls.append((city, refresh))
+        return self.payload
+
+
+SEA_PAYLOAD = {
+    "online": True,
+    "updated_at": "2026-09-17T12:00:00+03:00",
+    "warmest": {"id": "kerch", "name": "Керчь", "temp": 24},
+    "points": [
+        {
+            "id": "yalta",
+            "name": "Ялта",
+            "available": True,
+            "water_temp": 23,
+            "wave_height": 0.3,
+            "wave_label": "лёгкая рябь",
+            "verdict": {
+                "code": "comfort",
+                "emoji": "🏊",
+                "label": "купаться комфортно",
+            },
+        },
+        {"id": "kerch", "name": "Керчь", "available": False},
+    ],
+}
+
+
+def test_sea_endpoint_returns_bathing_verdicts(client, monkeypatch):
+    fake = _FakeSea(SEA_PAYLOAD)
+    monkeypatch.setattr(main, "sea_service", fake)
+    r = client.get("/api/sea")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["online"] is True
+    assert d["warmest"]["name"] == "Керчь"
+    point = next(p for p in d["points"] if p["id"] == "yalta")
+    assert point["verdict"]["code"] == "comfort"
+    assert point["water_temp"] == 23
+    assert fake.calls == [(None, False)]
+
+
+def test_sea_city_filter_and_refresh_pass_through(client, monkeypatch):
+    fake = _FakeSea({"online": True, "updated_at": "x", "warmest": None, "points": []})
+    monkeypatch.setattr(main, "sea_service", fake)
+    client.get("/api/sea?city=yalta&refresh=1")
+    assert fake.calls == [("yalta", True)]
+
+
+def test_sea_unknown_city_404(client):
+    r = client.get("/api/sea?city=gotham")
+    assert r.status_code == 404
+    assert "морская точка" in r.json()["detail"]
+
+
+def test_sea_inland_city_404_explains_why(client):
+    """У Симферополя моря нет — 404 должен объяснять причину, а не
+    притворяться, что города не существует."""
+    r = client.get("/api/sea?city=simferopol")
+    assert r.status_code == 404
+    assert "без выхода к морю" in r.json()["detail"]
+
+
 # ---------------- фронт, доступность, безопасность (0.12.0) ----------------
 
 

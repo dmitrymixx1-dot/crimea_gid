@@ -13,6 +13,11 @@ const TOPIC_LABELS = {
 const esc = s => String(s ?? "").replace(/[&<>"']/g,
   c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+/* Температура в русской записи: +23°, ноль и минус без «+»; null — «—». */
+const fmtTemp = t => (t === null || t === undefined)
+  ? "—"
+  : `${Number(t) > 0 ? "+" : ""}${Math.round(Number(t))}°`;
+
 /* Авария загрузки картинки: inline-обработчики запрещены CSP, поэтому
    одна делегированная пойма (capture) смотрит на data-img-fallback. */
 document.addEventListener("error", e => {
@@ -38,6 +43,7 @@ const state = {
   favs: new Set(),
   planAutoDone: false,
   weather: null,
+  sea: null,
   mapShowPlan: false,
   // Порционный показ каталога: текущая подборка и сколько карточек
   // из неё уже нарисовано (см. static/catalog-page.js).
@@ -169,6 +175,55 @@ function newsItemHTML(it) {
     </div>`;
 }
 
+/* ---------------- sea ---------------- */
+/* Купальный индекс приходит с сервера готовым вердиктом: пороги живут
+   в app/services/marine.py, фронт их не дублирует (в отличие от
+   «открыто сейчас», где решение зависит от часов устройства). */
+function seaStrip() {
+  const s = state.sea;
+  if (!s) return "";
+  const points = (s.points || []).filter(p => p.available);
+  if (!points.length) {
+    return `
+    <section class="section sea-strip">
+      <div class="section-head"><h2>🌊 Море и купание</h2></div>
+      <p class="muted" style="margin:0">Данных о воде сейчас нет — морская модель недоступна. Попробуйте позже.</p>
+    </section>`;
+  }
+  const best = s.warmest;
+  return `
+    <section class="section sea-strip">
+      <div class="section-head">
+        <h2>🌊 Море и купание</h2>
+        <span class="sub">Open-Meteo Marine · вода и волна · обновление раз в 3 часа</span>
+      </div>
+      ${best ? `<p class="sea-best">Самая тёплая вода — <b>${esc(best.name)}</b>,
+        ${fmtTemp(best.temp)}</p>` : ""}
+      <div class="weather-grid">
+        ${points.map(p => `
+          <div class="w-city sea-city">
+            <div class="w-name">${esc(p.name)}</div>
+            <div class="w-main">🌊 <b>${fmtTemp(p.water_temp)}</b></div>
+            <div class="sea-wave">${waveText(p)}</div>
+            <div class="sea-verdict sea-${esc(p.verdict.code)}">
+              ${p.verdict.emoji} ${esc(p.verdict.label)}
+            </div>
+          </div>`).join("")}
+      </div>
+      <p class="muted sea-note">Температуру поверхности воды и волну считает
+        морская модель: у берега вода может быть прохладнее, на мелководье — теплее.
+        Купайтесь на оборудованных пляжах.</p>
+    </section>`;
+}
+
+/* «волна 0,3 м · лёгкая рябь»; если модель отдала только температуру —
+   волну не выдумываем. */
+function waveText(p) {
+  if (p.wave_height === null || p.wave_height === undefined) return "волна: нет данных";
+  const m = String(p.wave_height).replace(".", ",");
+  return `волна ${m} м${p.wave_label ? ` · ${esc(p.wave_label)}` : ""}`;
+}
+
 /* ---------------- home ---------------- */
 function weatherStrip() {
   const w = state.weather;
@@ -191,10 +246,10 @@ function weatherStrip() {
         ${cities.map(c => `
           <div class="w-city" title="${c.current.label}, ветер ${c.current.wind} км/ч">
             <div class="w-name">${c.name}</div>
-            <div class="w-main">${c.current.emoji} <b>${c.current.temp > 0 ? "+" : ""}${c.current.temp}°</b></div>
+            <div class="w-main">${c.current.emoji} <b>${fmtTemp(c.current.temp)}</b></div>
             <div class="w-forecast">
               ${c.forecast.slice(1, 4).map(f =>
-                `<span class="w-day" title="${f.day}">${f.day} ${f.emoji} ${f.max > 0 ? "+" : ""}${f.max}°</span>`).join("")}
+                `<span class="w-day" title="${f.day}">${f.day} ${f.emoji} ${fmtTemp(f.max)}</span>`).join("")}
             </div>
           </div>`).join("")}
       </div>
@@ -234,6 +289,7 @@ function renderHome() {
     </section>
 
     ${weatherStrip()}
+    ${seaStrip()}
     <section class="section">
       <div class="section-head">
         <h2>Ваш профиль отдыха</h2>
@@ -1214,6 +1270,7 @@ $("#skip-link").addEventListener("click", e => {
   }
   try { await loadNews(); } catch (e) { /* badge останется в дефолте */ }
   api("/api/weather").then(d => { state.weather = d; route(); }).catch(() => {});
+  api("/api/sea").then(d => { state.sea = d; route(); }).catch(() => {});
   api("/api/health").then(d => {
     const el = document.getElementById("app-version");
     if (el && d.version) el.textContent = "v" + d.version;
