@@ -34,8 +34,10 @@ class QuizIn(BaseModel):
     `test_data.py::test_quiz_options_match_quiz_model`);
     мусор отклоняется с 422, а не превращается в дефолты."""
 
-    purpose: list[Literal["beach", "nature", "history", "food",
-                          "family", "photo", "extreme"]] = Field(default_factory=list)
+    purpose: list[Literal[
+        "beach", "nature", "history", "culture", "food", "wine", "active",
+        "extreme", "family", "photo", "spa", "city", "view", "free", "romance",
+    ]] = Field(default_factory=list)
     season: Literal["summer", "autumn", "spring", "winter", "any"] = "any"
     tempo: Literal["relax", "medium", "active"] = "medium"
     budget: Literal["economy", "comfort", "premium"] = "comfort"

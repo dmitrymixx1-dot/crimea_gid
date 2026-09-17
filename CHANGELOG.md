@@ -3,6 +3,20 @@
 Формат — [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 версии — [semver](https://semver.org/lang/ru/). Даты — UTC.
 
+## [Unreleased]
+
+### Added
+
+- Фаза 1.0: закрыт аудит покрытия тегов — все 15 тегов каталога теперь
+  доступны в первом вопросе квиза, имеют профиль отдыха (`PROFILES`) и связь
+  с темами ленты (`PURPOSE_TOPICS`); покрытие закреплено тестами.
+- Тема новостей `nature` для природных локаций, экотроп, мысов, гор и ущелий.
+
+### Docs
+
+- `ROADMAP.md` и `docs/data.md`: зафиксирована матрица покрытия
+  `TAGS` → `quiz.purpose` → `PROFILES` → `PURPOSE_TOPICS`.
+
 ## [0.12.0] — 2026-09-16
 
 Фаза «Фронт и доступность» ([ROADMAP](ROADMAP.md)). Поведение для
