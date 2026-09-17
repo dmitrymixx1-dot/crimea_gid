@@ -15,8 +15,9 @@
 
 ```
 app/
-├── main.py               # FastAPI: маршруты, middleware безопасности, SPA
+├── main.py               # FastAPI: маршруты, middleware безопасности и лимитов, SPA
 ├── config.py             # константы, переменные окружения, версия
+├── ratelimit.py          # скользящее окно на клиента → 429 + Retry-After
 └── services/
     ├── load.py           # загрузка JSON-данных (lru_cache)
     ├── recommend.py      # квиз → баллы → рекомендации → план по дням
@@ -30,6 +31,7 @@ static/
 ├── plan-link.js          # UMD: сериализация плана в ссылку (тестируется)
 ├── catalog-link.js       # UMD: фильтры каталога ↔ URL (тестируется)
 ├── hourly.js             # UMD: окно почасового прогноза (тестируется)
+├── rate-limit.js         # UMD: подписи ответа 429 по Retry-After (тестируется)
 ├── style.css             # стили + @media print + a11y (skip-link, sr-only)
 ├── sw.js                 # service worker (офлайн-оболочка)
 └── manifest.webmanifest  # PWA-манифест
@@ -206,6 +208,16 @@ Open-Meteo Marine: current (sea_surface_temperature, wave_height)
 
 ## Безопасность
 
+- **Лимиты** (`app/ratelimit.py`, middleware `rate_limit`): скользящее окно
+  на клиента для дорогих ручек — `POST /api/quiz/evaluate` и `?refresh=1`
+  у ленты, погоды и моря. Счётчики в памяти процесса, число ключей
+  ограничено; отказ — `429` с `Retry-After` и заголовками
+  `X-RateLimit-*`. Защитные заголовки навешивает outer-middleware
+  `security_headers`, поэтому и отказ уходит с CSP.
+  За своим прокси клиента определяет `X-Forwarded-For` (`TRUST_PROXY=1`
+  в compose; чужому клиенту заголовок верить нельзя). Uvicorn при запросе
+  с доверенного `127.0.0.1` подставляет `X-Forwarded-For` в адрес клиента
+  и сам — за удалённым прокси этого нет, там решает `TRUST_PROXY`.
 - Middleware: `X-Content-Type-Options: nosniff`, `Referrer-Policy`,
   `Content-Security-Policy` (`default-src 'self'`, `script-src 'self'`,
   `object-src 'none'`, `frame-ancestors 'self'` по умолчанию). Inline
@@ -237,6 +249,10 @@ Open-Meteo Marine: current (sea_surface_temperature, wave_height)
   `X-Forwarded-Proto/Host`, из которых собираются абсолютные OG-теги.
 - **Приложение** наружу не публикуется (`expose`, не `ports`):
   единственная точка входа — прокси.
+- **Выкат** — тегом: `.github/workflows/deploy.yml` прогоняет тесты релиза
+  и по SSH запускает `deploy/deploy.sh <тег>` на сервере (сборка образа
+  из исходников, ожидание healthy, сверка версии из `/api/health`).
+  Секреты (хост, пользователь, ключ) — только в GitHub Secrets.
 - **Состояние** — только файловый кэш ленты в томе `news-cache`.
   Данные некритичные (при потере лента пересобирается из источников),
   но бэкапятся скриптами `deploy/backup-cache.sh` / `restore-cache.sh`

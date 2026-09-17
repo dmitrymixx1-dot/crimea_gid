@@ -48,6 +48,10 @@ curl -s https://<DOMAIN>/api/health     # {"ok":true,"name":"Крым.Гид","v
 | `NEWS_CACHE_TTL` | | кэш ленты, сек (по умолчанию 900) |
 | `WEATHER_TTL` | | кэш погоды, сек (по умолчанию 3600) |
 | `CSP_FRAME_ANCESTORS` | | кому разрешено встраивать сайт в iframe |
+| `RATE_LIMIT_ENABLED` | | `0` — выключить лимиты на квиз и `refresh=1` |
+| `RATE_LIMIT_QUIZ` | | сколько расчётов квиза в минуту на клиента (30) |
+| `RATE_LIMIT_REFRESH` | | сколько принудительных обновлений в окно (6 за 300 с) |
+| `TRUST_PROXY` | | `1` — брать адрес клиента из `X-Forwarded-For` (за Caddy включён compose-ом) |
 
 Полный список ручек приложения — в [таблице README](../README.md#переменные-окружения).
 `SITE_ORIGIN` в compose выставляется автоматически из `DOMAIN` — руками
@@ -61,6 +65,9 @@ docker compose up -d --build     # пересборка + перезапуск �
 docker image prune -f            # подчистить старые слои
 ```
 
+То же самое делает [автодеплой по тегу](#автодеплой-по-тегу): он сам
+обновляет исходники, собирает образ, ждёт `healthy` и сверяет версию.
+
 Кэш ленты лежит в томе `news-cache` и переживает пересборку.
 После обновления у пользователей сменится версия service worker
 (`crimea-gid-v<версия>`), старый кэш оболочки удалится сам — отдельных
@@ -72,6 +79,64 @@ docker image prune -f            # подчистить старые слои
 git checkout <тег-или-коммит>
 docker compose up -d --build
 ```
+
+## Автодеплой по тегу
+
+Workflow [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml)
+выкатывает релиз без ручного доступа к серверу:
+
+```
+git tag v1.6.0 && git push --tags
+        │
+        ▼  GitHub Actions
+  preflight: ruff + pytest + node --test          (тег с красными тестами не едет)
+        ▼  ssh (ключ из секретов)
+  deploy/deploy.sh v1.6.0 на сервере:
+    git fetch --tags && git checkout --detach <тег>
+    docker compose up -d --build
+    ждём healthy (до 5 минут)
+    сверяем /api/health → версия == 1.6.0
+    docker image prune -f
+```
+
+Запустить вручную (без тега или чтобы откатиться на прошлый): **Actions →
+Deploy → Run workflow**, в поле `ref` — тег, ветку или коммит
+(например `v1.5.0`). Одновременные выкаты встают в очередь
+(`concurrency: deploy`), поэтому версии не перепутываются.
+
+### Что положить в секреты GitHub
+
+Settings → Secrets and variables → Actions → New repository secret:
+
+| Секрет | Обязателен | Что содержит |
+|---|---|---|
+| `DEPLOY_HOST` | ✔ | адрес сервера (`gid.example.ru`) |
+| `DEPLOY_USER` | ✔ | пользователь с доступом к docker и к клону репозитория |
+| `DEPLOY_PATH` | ✔ | каталог с клоном (`/opt/crimea_gid`) |
+| `DEPLOY_SSH_KEY` | ✔ | приватный ключ ed25519 целиком (с `-----END …-----`) |
+| `DEPLOY_PORT` | | порт SSH, по умолчанию 22 |
+| `DEPLOY_KNOWN_HOSTS` | | вывод `ssh-keyscan -H <host>`: без него workflow доверяет ключу хоста при первом подключении |
+
+Подготовка один раз, на сервере и локально:
+
+```bash
+# на сервере: клон, от которого будет работать deploy.sh
+sudo git clone <repo> /opt/crimea_gid && cd /opt/crimea_gid
+cp .env.example .env && $EDITOR .env
+
+# локально: отдельный ключ только для деплоя
+ssh-keygen -t ed25519 -f ~/.ssh/crimea_deploy -N ''
+ssh-copy-id -i ~/.ssh/crimea_deploy.pub <user>@<host>
+ssh-keyscan -H <host>            # → секрет DEPLOY_KNOWN_HOSTS
+```
+
+Ключ — в `DEPLOY_SSH_KEY`, содержимое `ssh-keyscan` — в
+`DEPLOY_KNOWN_HOSTS`. Пользователь должен входить в группу `docker`
+(иначе `docker compose` из-под SSH не запустится).
+
+Откат — тем же механизмом: запустите `Deploy` вручную с `ref` прошлого
+тега (или `./deploy/deploy.sh v1.5.0` на сервере). Скрипт просто
+переключает исходники и пересобирает образ; том `news-cache` не трогается.
 
 ## Бэкап и восстановление кэша
 
