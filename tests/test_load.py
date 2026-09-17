@@ -1,4 +1,5 @@
 """Юнит-тесты загрузчика данных (app/services/load.py)."""
+
 import pytest
 
 from app.services import load

@@ -1,23 +1,31 @@
 """Юнит-тесты конфигурации (app/config.py)."""
+
 import re
 
 from app import config
 
 
 def test_version_format():
-    assert re.fullmatch(r"\d+\.\d+\.\d+(-[a-z0-9.]+)?", config.APP_VERSION), \
+    assert re.fullmatch(r"\d+\.\d+\.\d+(-[a-z0-9.]+)?", config.APP_VERSION), (
         config.APP_VERSION
+    )
 
 
 def test_defaults_are_sane(monkeypatch):
     import importlib
-    for var in ("PORT", "NEWS_CACHE_TTL", "NEWS_HTTP_TIMEOUT",
-                "WEATHER_TTL", "WEATHER_HTTP_TIMEOUT"):
+
+    for var in (
+        "PORT",
+        "NEWS_CACHE_TTL",
+        "NEWS_HTTP_TIMEOUT",
+        "WEATHER_TTL",
+        "WEATHER_HTTP_TIMEOUT",
+    ):
         monkeypatch.delenv(var, raising=False)
     importlib.reload(config)  # читаем чистое окружение
     try:
         assert config.PORT == 8000
-        assert config.NEWS_CACHE_TTL == 900       # 15 минут
+        assert config.NEWS_CACHE_TTL == 900  # 15 минут
         assert config.NEWS_HTTP_TIMEOUT == 10
         assert config.WEATHER_TTL == 3600
         assert config.WEATHER_HTTP_TIMEOUT == 8
@@ -40,6 +48,7 @@ def test_paths_point_inside_repo():
 def test_env_override(monkeypatch):
     """Переменные окружения переопределяют дефолты (через reimport)."""
     import importlib
+
     monkeypatch.setenv("PORT", "9999")
     monkeypatch.setenv("NEWS_CACHE_TTL", "5")
     importlib.reload(config)

@@ -1,4 +1,5 @@
 """Загрузка JSON-данных из app/data с простым кэшированием."""
+
 import json
 from functools import cache
 from pathlib import Path

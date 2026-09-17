@@ -75,10 +75,18 @@ def test_quiz_content(client):
 
 
 def test_quiz_evaluate_full(client):
-    r = client.post("/api/quiz/evaluate", json={
-        "purpose": ["beach", "photo"], "season": "summer", "tempo": "relax",
-        "budget": "comfort", "party": "couple", "duration": "3-5", "transport": "car",
-    })
+    r = client.post(
+        "/api/quiz/evaluate",
+        json={
+            "purpose": ["beach", "photo"],
+            "season": "summer",
+            "tempo": "relax",
+            "budget": "comfort",
+            "party": "couple",
+            "duration": "3-5",
+            "transport": "car",
+        },
+    )
     assert r.status_code == 200
     d = r.json()
     assert d["profile"]["title"]
@@ -164,6 +172,7 @@ def test_index_links_manifest(client):
 
 # ---------------- расширенный каталог (0.10.0) ----------------
 
+
 def test_catalog_grew_to_fifty(client):
     body = client.get("/api/attractions").json()
     assert body["count"] >= 50
@@ -177,8 +186,7 @@ def test_extreme_tag_filter(client):
 
 
 def test_western_area_filter(client):
-    body = client.get("/api/attractions?area="
-                      + urllib.parse.quote("Западный")).json()
+    body = client.get("/api/attractions?area=" + urllib.parse.quote("Западный")).json()
     assert body["count"] >= 5
     ids = {a["id"] for a in body["items"]}
     assert {"tarkhankut", "olenivka", "atlesh"} <= ids
@@ -198,11 +206,18 @@ def test_quiz_offers_extreme_interest(client):
 
 
 def test_quiz_evaluate_extreme_profile(client):
-    r = client.post("/api/quiz/evaluate", json={
-        "purpose": ["extreme"], "season": "summer", "tempo": "active",
-        "budget": "comfort", "party": "friends", "duration": "3-5",
-        "transport": "car",
-    })
+    r = client.post(
+        "/api/quiz/evaluate",
+        json={
+            "purpose": ["extreme"],
+            "season": "summer",
+            "tempo": "active",
+            "budget": "comfort",
+            "party": "friends",
+            "duration": "3-5",
+            "transport": "car",
+        },
+    )
     assert r.status_code == 200
     d = r.json()
     assert d["profile"]["title"] == "Крым на адреналине"
@@ -215,12 +230,20 @@ def test_health_reports_new_version(client):
 
 # ---------------- контракт API (0.11.0) ----------------
 
+
 def test_quiz_evaluate_rejects_garbage_values(client):
-    r = client.post("/api/quiz/evaluate", json={
-        "purpose": ["beach"], "season": "never", "budget": "free",
-        "tempo": "turbo", "party": "aliens", "duration": "100",
-        "transport": "teleport",
-    })
+    r = client.post(
+        "/api/quiz/evaluate",
+        json={
+            "purpose": ["beach"],
+            "season": "never",
+            "budget": "free",
+            "tempo": "turbo",
+            "party": "aliens",
+            "duration": "100",
+            "transport": "teleport",
+        },
+    )
     assert r.status_code == 422
 
 
@@ -249,6 +272,7 @@ def test_weather_single_city_filter(client):
 
 
 # ---------------- фронт, доступность, безопасность (0.12.0) ----------------
+
 
 def _csp(client, path="/"):
     return client.get(path).headers.get("content-security-policy", "")
@@ -299,10 +323,13 @@ def test_index_og_urls_rendered_absolute(client):
 
 
 def test_index_og_honours_forwarded_headers(client):
-    html = client.get("/", headers={
-        "X-Forwarded-Proto": "https",
-        "X-Forwarded-Host": "gid.example.ru, proxy.internal",
-    }).text
+    html = client.get(
+        "/",
+        headers={
+            "X-Forwarded-Proto": "https",
+            "X-Forwarded-Host": "gid.example.ru, proxy.internal",
+        },
+    ).text
     assert 'property="og:url" content="https://gid.example.ru/"' in html
     assert 'content="https://gid.example.ru/static/img/hero.jpg"' in html
 
@@ -315,7 +342,7 @@ def test_index_og_site_origin_env_wins_over_headers(client, monkeypatch):
 
 def test_index_a11y_landmarks_and_live_regions(client):
     html = client.get("/").text
-    assert 'class="skip-link"' in html            # skip-link «к содержимому»
+    assert 'class="skip-link"' in html  # skip-link «к содержимому»
     assert 'id="toast-root" role="status" aria-live="polite"' in html
     assert 'id="route-status" class="sr-only" role="status"' in html
     assert '<nav class="nav" aria-label="Основные разделы">' in html
@@ -323,6 +350,7 @@ def test_index_a11y_landmarks_and_live_regions(client):
 
 
 # ---------------- расширение каталога, фаза 1.0 ----------------
+
 
 def test_catalog_grew_to_sixty(client):
     body = client.get("/api/attractions").json()
@@ -332,12 +360,17 @@ def test_catalog_grew_to_sixty(client):
 def test_western_area_is_a_full_region_now(client):
     """Западный Крым дорос до самостоятельного направления: на него
     планировщик должен собирать полноценные дни, а не один заезд."""
-    body = client.get("/api/attractions?area="
-                      + urllib.parse.quote("Западный")).json()
+    body = client.get("/api/attractions?area=" + urllib.parse.quote("Западный")).json()
     assert body["count"] >= 15
     ids = {a["id"] for a in body["items"]}
-    assert {"belyaus", "donuzlav", "sasyk-sivash", "kenasy",
-            "bakalskaya-kosa", "mezhvodnoe"} <= ids
+    assert {
+        "belyaus",
+        "donuzlav",
+        "sasyk-sivash",
+        "kenasy",
+        "bakalskaya-kosa",
+        "mezhvodnoe",
+    } <= ids
 
 
 def test_attraction_detail_exposes_opening_hours(client):
@@ -348,8 +381,16 @@ def test_attraction_detail_exposes_opening_hours(client):
 
 
 def test_new_western_points_are_reachable_by_id(client):
-    for pid in ("belyaus", "donuzlav", "sasyk-sivash", "okunevka",
-                "krym-miniature", "kenasy", "mezhvodnoe", "bakalskaya-kosa"):
+    for pid in (
+        "belyaus",
+        "donuzlav",
+        "sasyk-sivash",
+        "okunevka",
+        "krym-miniature",
+        "kenasy",
+        "mezhvodnoe",
+        "bakalskaya-kosa",
+    ):
         r = client.get(f"/api/attractions/{pid}")
         assert r.status_code == 200, pid
         body = r.json()
@@ -359,11 +400,18 @@ def test_new_western_points_are_reachable_by_id(client):
 
 def test_quiz_plans_a_western_trip(client):
     """Пляж + экстрим без машины на западе теперь даёт живой план."""
-    r = client.post("/api/quiz/evaluate", json={
-        "purpose": ["beach", "extreme"], "season": "summer", "tempo": "medium",
-        "budget": "economy", "party": "friends", "duration": "3-5",
-        "transport": "car",
-    })
+    r = client.post(
+        "/api/quiz/evaluate",
+        json={
+            "purpose": ["beach", "extreme"],
+            "season": "summer",
+            "tempo": "medium",
+            "budget": "economy",
+            "party": "friends",
+            "duration": "3-5",
+            "transport": "car",
+        },
+    )
     assert r.status_code == 200
     body = r.json()
     assert body["itinerary"]["days"]

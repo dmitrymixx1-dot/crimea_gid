@@ -3,6 +3,7 @@
 Сеть не дёргаем: httpx-клиент подменяется фейком, отдающим фиксированный
 ответ Open-Meteo, либо метод _fetch_city заглушается целиком.
 """
+
 import asyncio
 import os
 import time
@@ -15,15 +16,19 @@ from app.services.weather import CITIES, WEEKDAYS, WeatherService, _code_info
 # _code_info: WMO-коды → (эмодзи, подпись)
 # --------------------------------------------------------------------------
 
-@pytest.mark.parametrize("code,emoji,label", [
-    (0, "☀️", "ясно"),
-    (1, "🌤️", "в основном ясно"),
-    (3, "☁️", "пасмурно"),
-    (61, "🌦️", "небольшой дождь"),
-    (80, "🌦️", "небольшой ливень"),
-    (95, "⛈️", "гроза"),
-    (75, "❄️", "сильный снег"),
-])
+
+@pytest.mark.parametrize(
+    "code,emoji,label",
+    [
+        (0, "☀️", "ясно"),
+        (1, "🌤️", "в основном ясно"),
+        (3, "☁️", "пасмурно"),
+        (61, "🌦️", "небольшой дождь"),
+        (80, "🌦️", "небольшой ливень"),
+        (95, "⛈️", "гроза"),
+        (75, "❄️", "сильный снег"),
+    ],
+)
 def test_code_info_known_codes(code, emoji, label):
     assert _code_info(code) == (emoji, label)
 
@@ -50,6 +55,7 @@ def test_weekdays_russian_order():
 # --------------------------------------------------------------------------
 # _fetch_city: разбор ответа Open-Meteo
 # --------------------------------------------------------------------------
+
 
 class _FakeResponse:
     def __init__(self, payload, status=200):
@@ -100,10 +106,10 @@ def test_fetch_city_parses_current():
     out = _fetch(svc, _FakeClient(OPEN_METEO_SAMPLE))
     assert out["available"] is True
     assert out["id"] == "yalta" and out["name"] == "Ялта"
-    assert out["current"]["temp"] == 22          # 21.6 → округление
+    assert out["current"]["temp"] == 22  # 21.6 → округление
     assert out["current"]["emoji"] == "🌤️"
     assert out["current"]["label"] == "в основном ясно"
-    assert out["current"]["wind"] == 12          # 12.4 → округление
+    assert out["current"]["wind"] == 12  # 12.4 → округление
 
 
 def test_fetch_city_sends_city_coordinates():
@@ -151,8 +157,7 @@ def test_fetch_city_weekday_label_local_date():
 def test_fetch_city_handles_short_daily_arrays():
     """Open-Meteo может вернуть меньше дней или пропустить значения."""
     payload = {
-        "current": {"temperature_2m": 10.0, "weather_code": 3,
-                    "wind_speed_10m": 1.0},
+        "current": {"temperature_2m": 10.0, "weather_code": 3, "wind_speed_10m": 1.0},
         "daily": {
             "time": ["2026-09-16", "2026-09-17"],
             "weather_code": [3],
@@ -172,6 +177,7 @@ def test_fetch_city_handles_short_daily_arrays():
 # WeatherService.get: кэш, фильтр по городу, падение сети
 # --------------------------------------------------------------------------
 
+
 def _stub_fetch(avail=True):
     calls = {"n": 0}
 
@@ -180,10 +186,13 @@ def _stub_fetch(avail=True):
         if not avail:
             raise RuntimeError("no network")
         return {
-            "id": city_id, "name": name, "available": True,
+            "id": city_id,
+            "name": name,
+            "available": True,
             "current": {"temp": 20, "emoji": "☀️", "label": "ясно", "wind": 5},
             "forecast": [],
         }
+
     return fake, calls
 
 
@@ -221,7 +230,7 @@ def test_cache_ttl_avoids_refetch():
     svc = _svc(fake)
     asyncio.run(svc.get(city="yalta"))
     assert calls["n"] == 1
-    out = asyncio.run(svc.get(city="yalta"))   # попали в кэш
+    out = asyncio.run(svc.get(city="yalta"))  # попали в кэш
     assert calls["n"] == 1
     assert out["online"] is True
 
@@ -238,8 +247,7 @@ def test_network_failure_marks_cities_unavailable():
     fake, _ = _stub_fetch(avail=False)
     out = asyncio.run(_svc(fake).get(city="kerch"))
     assert out["online"] is False
-    assert out["cities"] == [{"id": "kerch", "name": "Керчь",
-                              "available": False}]
+    assert out["cities"] == [{"id": "kerch", "name": "Керчь", "available": False}]
 
 
 def test_payload_has_updated_at():
@@ -253,6 +261,7 @@ def test_payload_has_updated_at():
 # --------------------------------------------------------------------------
 # Список курортов
 # --------------------------------------------------------------------------
+
 
 def test_cities_are_unique_and_in_crimea():
     ids = [c[0] for c in CITIES]

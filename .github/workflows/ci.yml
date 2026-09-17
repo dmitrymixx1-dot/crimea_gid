@@ -19,6 +19,8 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Lint (ruff)
         run: ruff check app tests
+      - name: Format (ruff)
+        run: ruff format --check app tests tools
       - name: JS syntax check
         run: |
           node --check static/app.js

@@ -4,16 +4,23 @@
 Бюджеты веса зеркалят `tools/optimize_images.py`: картинки ужали
 ресайзом и качеством, тесты не дают им «растолстеть» обратно.
 """
+
 import json
 import re
 
 from app.config import APP_VERSION, STATIC_DIR
 from app.services.load import get_attractions
 
-FRONT_FILES = ["index.html", "app.js", "plan-link.js", "catalog-link.js",
-               "favs-link.js", "sw.js"]
+FRONT_FILES = [
+    "index.html",
+    "app.js",
+    "plan-link.js",
+    "catalog-link.js",
+    "favs-link.js",
+    "sw.js",
+]
 
-BUDGET_HERO = 220_000     # байт
+BUDGET_HERO = 220_000  # байт
 BUDGET_CAT = 130_000
 BUDGET_TOTAL = 1_300_000
 
@@ -32,17 +39,18 @@ def jpeg_size(path):
             continue
         marker = data[i + 1]
         if marker in (0xC0, 0xC1, 0xC2, 0xC3):
-            h = int.from_bytes(data[i + 5:i + 7], "big")
-            w = int.from_bytes(data[i + 7:i + 9], "big")
+            h = int.from_bytes(data[i + 5 : i + 7], "big")
+            w = int.from_bytes(data[i + 7 : i + 9], "big")
             return w, h
         if marker == 0xD8 or 0xD0 <= marker <= 0xD7 or marker == 0x01:
             i += 2
             continue
-        i += 2 + int.from_bytes(data[i + 2:i + 4], "big")
+        i += 2 + int.from_bytes(data[i + 2 : i + 4], "big")
     raise AssertionError(f"не найден SOF-фрейм: {path}")
 
 
 # ---------------- вес и размеры картинок ----------------
+
 
 def test_image_weight_budget():
     hero = STATIC_DIR / "img" / "hero.jpg"
@@ -72,6 +80,7 @@ def test_hero_is_high_priority_without_inline_handlers():
 
 # ---------------- CSP-совместимая разметка ----------------
 
+
 def test_no_inline_event_handlers_in_frontend():
     """CSP `script-src 'self'` запрещает inline-обработчики:
     ни одного on…= в шаблонах и каркасе."""
@@ -93,7 +102,7 @@ def test_every_img_in_templates_has_meaningful_alt():
     tags = re.findall(r"<img\b[^>]*>", app, re.S)
     assert tags
     for tag in tags:
-        assert re.search(r'alt="[^"]+"', tag), tag   # непустой alt у каждой
+        assert re.search(r'alt="[^"]+"', tag), tag  # непустой alt у каждой
     assert 'alt=""' not in app
     assert 'alt=""' not in read("index.html")
 
@@ -104,6 +113,7 @@ def test_no_javascript_urls():
 
 
 # ---------------- согласованность оболочки ----------------
+
 
 def test_manifest_mentions_real_catalog_size():
     m = json.loads(read("manifest.webmanifest"))
@@ -133,10 +143,12 @@ def test_catalog_link_module_is_umd():
 
 # ---------------- деплой-конфигурация (фаза 1.0) ----------------
 
+
 def test_compose_serves_app_behind_caddy():
     """docker-compose.yml — прод-схема: приложение наружу не торчит,
     HTTPS терминирует Caddy, кэш ленты лежит в именованном томе."""
     import yaml
+
     root = STATIC_DIR.parent
     compose = yaml.safe_load((root / "docker-compose.yml").read_text("utf-8"))
     app_svc, caddy = compose["services"]["app"], compose["services"]["caddy"]
@@ -167,7 +179,7 @@ def test_caddyfile_proxies_with_forwarded_headers():
     caddy = (STATIC_DIR.parent / "deploy" / "Caddyfile").read_text("utf-8")
     assert "reverse_proxy app:8000" in caddy
     assert "X-Forwarded-Proto" in caddy and "X-Forwarded-Host" in caddy
-    assert "/api/health" in caddy          # проверка живости бэкенда
+    assert "/api/health" in caddy  # проверка живости бэкенда
     assert "Strict-Transport-Security" in caddy
     # Service worker не должен залипать в кэше прокси.
     assert "/sw.js" in caddy and "no-cache" in caddy
@@ -182,6 +194,7 @@ def test_env_secrets_are_not_committed():
 
 def test_backup_scripts_are_executable_and_sane():
     import os
+
     deploy = STATIC_DIR.parent / "deploy"
     for name in ("backup-cache.sh", "restore-cache.sh"):
         path = deploy / name
@@ -194,6 +207,7 @@ def test_backup_scripts_are_executable_and_sane():
 
 
 # ---------------- порционный показ каталога (фаза 1.1) ----------------
+
 
 def test_catalog_page_module_is_umd_and_precached():
     src = read("catalog-page.js")
@@ -250,6 +264,7 @@ def test_paged_catalog_appends_instead_of_full_repaint():
 
 # ---------------- «открыто сейчас» (фаза 1.1) ----------------
 
+
 def test_open_now_module_is_umd_and_wired():
     src = read("open-now.js")
     assert "module.exports" in src and "root.OpenNow" in src
@@ -284,6 +299,7 @@ def test_catalog_open_filter_has_a_disclaimer():
 
 
 # ---------------- шаринг избранного (фаза 1.2) ----------------
+
 
 def test_favs_link_module_is_umd_and_wired():
     src = read("favs-link.js")

@@ -70,7 +70,8 @@ node --check static/app.js && node --check static/plan-link.js \
 GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 и на PR:
 
-1. **test** — install deps (`requirements-dev.txt`) → `ruff check app tests` →
+1. **test** — install deps (`requirements-dev.txt`) → `ruff check app tests`
+   → `ruff format --check app tests tools` →
    `node --check` (`app.js`, `plan-link.js`, `catalog-link.js`,
    `catalog-page.js`, `open-now.js`, `favs-link.js`, `sw.js`) →
    `node --test "tests/js/*.test.js"` → `pytest -q`;
@@ -81,7 +82,9 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 
 - Python: PEP 8, строки ≤ 88 символов, docstring на модулях, публичных
   классах и нетривиальных функциях. Комментарии и сообщения — на русском.
-  Стиль enforced: `ruff check app tests` (конфиг — `pyproject.toml`).
+  Стиль enforced: `ruff check app tests` + `ruff format app tests tools`
+  (конфиг — `pyproject.toml`; версия ruff закреплена в
+  `requirements-dev.txt`, чтобы формат не дрейфовал в CI).
 - Типизация: аннотации в сигнатурах сервисов (`dict`, `list[dict]`,
   `tuple[...]`); `pydantic.BaseModel` для тел запросов.
 - JS: ES2020, без транспиляции; `$`/`$$` — хелперы селекторов; состояние —
