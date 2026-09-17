@@ -243,6 +243,18 @@ async function api(url, opts) {
       at: Date.now(),
     };
   }
+  // Общий потолок клиента приходит своими заголовками на любой дорогой
+  // ручке. Держим его отдельной записью: когда он исчерпан, остаток
+  // своей ручки обещает обновления, которых сервер уже не отдаст.
+  const ceiling = RateLimit.readCeiling(res.headers);
+  if (ceiling) {
+    state.budgets[RateLimit.CEILING_RULE] = {
+      ...ceiling,
+      rule: RateLimit.CEILING_RULE,
+      retryAfter: RateLimit.parseRetryAfter(res.headers.get("Retry-After")),
+      at: Date.now(),
+    };
+  }
   if (!res.ok) {
     const err = new Error(`${res.status} ${res.statusText}`);
     err.status = res.status;
@@ -280,8 +292,12 @@ function freshBudget(rule) {
   return b;
 }
 
-/** Подпись остатка бюджета для шапки ленты (пустая строка — молчим). */
+/** Подпись остатка бюджета для шапки ленты (пустая строка — молчим).
+    Исчерпанный общий потолок клиента важнее остатка ленты: ручка ещё
+    не потрачена, а обновлений сервер уже не отдаст. */
 function budgetHint() {
+  const ceiling = freshBudget(RateLimit.CEILING_RULE);
+  if (ceiling && ceiling.remaining === 0) return t(RateLimit.budgetText(ceiling));
   return t(RateLimit.budgetText(freshBudget("news")));
 }
 
@@ -380,6 +396,20 @@ function attractionCard(a) {
         ${openLabel ? `<div class="open-now">${esc(openLabel)}</div>` : ""}
       </div>
     </article>`;
+}
+
+/** Оговорка для английского экрана: заголовки лент останутся русскими.
+
+    Машинного перевода в проекте нет, а чужой текст мы не переписываем —
+    об этом честнее сказать до чтения, а не после. Русскому экрану
+    оговорка не нужна: он читает ленту в оригинале, поэтому строка
+    появляется только вместе с английской речью (перевод — из словаря). */
+function foreignHeadlinesNote() {
+  if (state.lang !== "en") return "";
+  return `
+    <p class="muted" id="news-foreign" style="margin:0 0 14px">
+      ${t("Заголовки остаются русскими: чужие тексты мы не переводим, ссылка ведёт на источник.")}
+    </p>`;
 }
 
 function newsItemHTML(it) {
@@ -1110,6 +1140,7 @@ async function renderNews(refresh = false) {
           </button>
         </div>
       </div>
+      ${foreignHeadlinesNote()}
       <div id="news-offline"></div>
       <div class="filter-row" id="news-topics" style="margin-bottom:16px"></div>
       <div id="news-list"></div>

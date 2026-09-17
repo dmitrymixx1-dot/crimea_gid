@@ -1,6 +1,6 @@
-# Автодеплой по тегу: сначала проверяем релиз тестами, потом выкатываем
-# его по SSH. Никаких сторонних экшенов и секретов в репозитории: ключ,
-# хост и путь до клона лежат в секретах GitHub.
+# Автодеплой по тегу: сначала проверяем релиз тестами и репетицией выката,
+# потом катим его по SSH. Никаких сторонних экшенов и секретов в репозитории:
+# ключ, хост и путь до клона лежат в секретах GitHub.
 #
 # Секреты (Settings → Secrets and variables → Actions):
 #   DEPLOY_HOST        — адрес сервера
@@ -9,6 +9,10 @@
 #   DEPLOY_SSH_KEY     — приватный ключ ed25519 (публичный — на сервере)
 #   DEPLOY_PORT        — порт SSH (необязательно, по умолчанию 22)
 #   DEPLOY_KNOWN_HOSTS — вывод `ssh-keyscan -H <host>` (необязательно, но желателен)
+#
+# Репетиция (dry_run=true при ручном запуске) проходит весь путь до SSH:
+# тесты релиза, проверка секретов и `deploy.sh --dry-run`. Она нужна, чтобы
+# сценарий выката можно было проверить до того, как появились сервер и ключи.
 name: Deploy
 
 on:
@@ -20,6 +24,12 @@ on:
         description: "Тег или коммит для выката"
         required: true
         default: main
+      dry_run:
+        description: "Репетиция: тесты и план выката, без SSH"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
 
 # Два выката одновременно перепутали бы версии: пусть встают в очередь.
 concurrency:
@@ -53,11 +63,27 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
           ruff check app tests
+          ruff format --check app tests tools
           python -m pytest -q
           node --test "tests/js/*.test.js"
+          python tools/i18n_en/build.py --check
+
+      # Репетиция выката: те же проверки, что делает сервер (ref существует,
+      # состав репозитория цел, скрипты валидны, версия в коде совпадает
+      # с тегом), только без Docker и без SSH.
+      - name: Репетиция выката
+        env:
+          REF: ${{ github.event.inputs.ref || github.ref_name }}
+        run: |
+          case "$REF" in
+            v*) expect="${REF#v}" ;;
+            *) expect="" ;;
+          esac
+          DRY_RUN=1 APP_DIR="$PWD" EXPECT_VERSION="$expect" ./deploy/deploy.sh HEAD
 
       - name: Проверить секреты деплоя
         env:
+          DRY: ${{ github.event.inputs.dry_run || 'false' }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
@@ -68,11 +94,16 @@ jobs:
             [ -n "${!var:-}" ] || missing="$missing $var"
           done
           if [ -n "$missing" ]; then
+            if [ "$DRY" = "true" ]; then
+              echo "::warning::репетиция: не заданы секреты:$missing — настоящий выкат бы не прошёл"
+              exit 0
+            fi
             echo "::error::не заданы секреты:$missing — Settings → Secrets and variables → Actions"
             exit 1
           fi
 
       - name: Настроить SSH
+        if: ${{ (github.event.inputs.dry_run || 'false') != 'true' }}
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -90,6 +121,7 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Выкатить
+        if: ${{ (github.event.inputs.dry_run || 'false') != 'true' }}
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -97,7 +129,7 @@ jobs:
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           REF: ${{ github.event.inputs.ref || github.ref_name }}
         run: |
-          # Теги вида v1.7.0 → ожидаемая версия 1.7.0 (без «v»);
+          # Теги вида v1.9.0 → ожидаемая версия 1.9.0 (без «v»);
           # ветку версией не сверяем.
           case "$REF" in
             v*) expect="${REF#v}" ;;
@@ -110,7 +142,7 @@ jobs:
               "cd '$DEPLOY_PATH' && EXPECT_VERSION='$expect' ./deploy/deploy.sh '$REF'"
 
       - name: Что получилось
-        if: success()
+        if: ${{ success() && (github.event.inputs.dry_run || 'false') != 'true' }}
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -122,3 +154,9 @@ jobs:
               -p "${DEPLOY_PORT:-22}" \
               "$DEPLOY_USER@$DEPLOY_HOST" \
               "cd '$DEPLOY_PATH' && docker compose ps && git describe --tags --always"
+
+      - name: Итог репетиции
+        if: ${{ always() && (github.event.inputs.dry_run || 'false') == 'true' }}
+        run: |
+          echo "::notice::Репетиция завершена: тесты релиза, проверка секретов и план выката прошли без SSH."
+          echo "::notice::Для настоящего выката запустите workflow с dry_run=false (или пушьте тег v*)."

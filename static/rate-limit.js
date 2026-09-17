@@ -6,7 +6,11 @@
    а текстами пользуются все ручки, которые умеют отвечать 429.
 
    Ожидание берём из заголовка Retry-After, а не выдумываем: сервер
-   знает, когда освободится слот, а клиент — нет. */
+   знает, когда освободится слот, а клиент — нет.
+
+   Бюджетов два уровня: свой у ручки (X-RateLimit-*) и общий потолок
+   клиента (X-RateLimit-Total-*). Кнопке важен более тесный из них —
+   иначе она пообещала бы обновление, которое сервер уже не отдаст. */
 (function (root, factory) {
   const api = factory();
   if (typeof module !== "undefined" && module.exports) module.exports = api;
@@ -16,6 +20,10 @@
 
   const MAX_SECONDS = 3600;   // ждать дольше часа бессмысленно — обрываем
   const MINUTE = 60;
+  // Имя общего потолка клиента: он один на все ручки и приходит своими
+  // заголовками (X-RateLimit-Total-*). Совпадает с именем правила, которое
+  // сервер ставит в X-RateLimit-Rule, когда отказал именно потолок.
+  const CEILING_RULE = "total";
 
   /** Секунды ожидания из заголовка Retry-After; мусор → null. */
   function parseRetryAfter(value) {
@@ -61,11 +69,26 @@
     return Math.round(n);
   }
 
-  /** Бюджет из заголовков X-RateLimit-*: {rule, limit, remaining, reset}.
+  /** Общий потолок клиента из X-RateLimit-Total-*: {limit, remaining, reset}
+      или null, если сервер его не включил (RATE_LIMIT_TOTAL=0). */
+  function readCeiling(headers) {
+    if (!headers || typeof headers.get !== "function") return null;
+    const ceiling = {
+      limit: intOrNull(headers.get("X-RateLimit-Total-Limit")),
+      remaining: intOrNull(headers.get("X-RateLimit-Total-Remaining")),
+      reset: intOrNull(headers.get("X-RateLimit-Total-Reset")),
+    };
+    if (ceiling.limit === null && ceiling.remaining === null) return null;
+    return ceiling;
+  }
+
+  /** Бюджет из заголовков X-RateLimit-*: {rule, limit, remaining, reset, total}.
       Ждём настоящие Headers ответа (`res.headers`): заголовка нет —
       поля нет, а если сервер не сказал ничего — null, а не выдуманный
       лимит из воздуха. `rule` — имя бюджета (лента, погода, квиз…):
-      у каждой ручки он свой, и складывать их в одну кучу нельзя. */
+      у каждой ручки он свой, и складывать их в одну кучу нельзя.
+      `total` — общий потолок клиента поверх бюджетов ручек: своя ручка
+      может быть ещё не потрачена, а запрос уже не проходит. */
   function readBudget(headers) {
     if (!headers || typeof headers.get !== "function") return null;
     const rule = String(headers.get("X-RateLimit-Rule") || "").trim();
@@ -74,6 +97,7 @@
       limit: intOrNull(headers.get("X-RateLimit-Limit")),
       remaining: intOrNull(headers.get("X-RateLimit-Remaining")),
       reset: intOrNull(headers.get("X-RateLimit-Reset")),
+      total: readCeiling(headers),
     };
     if (
       budget.limit === null &&
@@ -87,12 +111,20 @@
 
   /** Сколько секунд кнопку лучше не трогать: 0 — можно.
       Считаем и исчерпанный бюджет (remaining 0 → ждём очистки окна),
-      и прямой отказ (Retry-After): смысл один — запрос всё равно
-      кончится 429, а бюджет только потратится. */
+      и исчерпанный общий потолок клиента, и прямой отказ (Retry-After):
+      смысл один — запрос всё равно кончится 429, а бюджет только
+      потратится. Берём самое долгое ожидание: оно покрывает оба окна. */
   function cooldownSeconds(budget, retryAfter) {
     let wait = parseRetryAfter(retryAfter) || 0;
     if (budget && budget.remaining === 0) {
       const reset = parseRetryAfter(budget.reset);
+      if (reset) wait = Math.max(wait, reset);
+    }
+    // Общий потолок клиента: остаток ручки может быть ненулевым, а запрос
+    // всё равно кончится 429 — ждём открытия общего окна, не своего.
+    const ceiling = budget && budget.total;
+    if (ceiling && ceiling.remaining === 0) {
+      const reset = parseRetryAfter(ceiling.reset);
       if (reset) wait = Math.max(wait, reset);
     }
     return wait;
@@ -100,10 +132,18 @@
 
   /** Подпись остатка бюджета: «осталось 2 обновления из 6», а на нуле —
       «обновления исчерпаны» (ноль остатка читается как ошибка, а не как
-      факт). Полный бюджет и незнакомая ручка молчат — сообщать нечего. */
+      факт). Тот же текст — на исчерпанном общем потолке клиента: ручка
+      ещё не потрачена, но обновлений сервер уже не отдаст. Полный бюджет
+      и незнакомая ручка молчат — сообщать нечего. */
   function budgetText(budget) {
     if (!budget || budget.remaining === null || budget.limit === null) return "";
     if (budget.remaining <= 0) return "обновления исчерпаны";
+    // Потолок клиента исчерпан — кнопка не сработает, и обещать «осталось
+    // 4 из 6» в этот момент значит соврать: этих четырёх уже не отдать.
+    const ceiling = budget.total;
+    if (ceiling && ceiling.remaining !== null && ceiling.remaining <= 0) {
+      return "обновления исчерпаны";
+    }
     if (budget.remaining >= budget.limit) return "";
     const forms = ["обновление", "обновления", "обновлений"];
     return `осталось ${budget.remaining} ${plural(budget.remaining, forms)} из ${budget.limit}`;
@@ -115,10 +155,12 @@
     waitText,
     message,
     intOrNull,
+    readCeiling,
     readBudget,
     cooldownSeconds,
     budgetText,
     MAX_SECONDS,
     MINUTE,
+    CEILING_RULE,
   };
 });
