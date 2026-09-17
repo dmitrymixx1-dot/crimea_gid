@@ -7,11 +7,13 @@
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from . import config, ratelimit
 from .config import APP_VERSION, CSP, SITE_ORIGIN, STATIC_DIR
+from .ratelimit import limiter
 from .services.load import get_attractions, get_quiz
 from .services.marine import SEA_IDS, sea_service
 from .services.news import news_service
@@ -19,6 +21,37 @@ from .services.recommend import TAGS, TYPE_META, evaluate
 from .services.weather import CITY_IDS, weather_service
 
 app = FastAPI(title="Крым.Гид", version=APP_VERSION)
+
+
+@app.middleware("http")
+async def rate_limit(request, call_next):
+    """Лимит на дорогие ручки: `POST /api/quiz/evaluate` (перебор каталога)
+    и `?refresh=1` у ленты, погоды и моря (поход во внешние источники).
+
+    Всё остальное считаем бесплатно: каталог, health и статика не должны
+    наказывать обычный просмотр. Отказ — `429` с `Retry-After`, а не 500
+    и не молчаливое «ответили как умеем»: клиенту важно понимать причину.
+    """
+    if not config.RATE_LIMIT_ENABLED:
+        return await call_next(request)
+    rule = ratelimit.match_rule(request)
+    if rule is None:
+        return await call_next(request)
+    name, limit, window = rule
+    key = f"{name}:{ratelimit.client_ip(request)}"
+    decision = limiter.check(key, limit, window)
+    headers = ratelimit.headers(decision)
+    if not decision.allowed:
+        headers[ratelimit.HEADER_RETRY_AFTER] = str(decision.retry_after)
+        return JSONResponse(
+            status_code=429,
+            content={"detail": ratelimit.detail(decision.retry_after)},
+            headers=headers,
+        )
+    response = await call_next(request)
+    for name_, value in headers.items():
+        response.headers[name_] = value
+    return response
 
 
 @app.middleware("http")

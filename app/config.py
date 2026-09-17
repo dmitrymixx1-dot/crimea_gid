@@ -33,6 +33,34 @@ MARINE_TTL = int(os.environ.get("MARINE_TTL", str(3 * 60 * 60)))
 MARINE_HTTP_TIMEOUT = float(os.environ.get("MARINE_HTTP_TIMEOUT", "8"))
 MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
 
+# Ограничение частоты запросов: дорогие ручки (квиз и принудительное
+# обновление ленты/погоды/моря) закрыты лимитом на клиента. Счётчики
+# живут в памяти процесса — БД и внешних сервисов у проекта нет,
+# а рестарт обнуление счётчиков прощает.
+RATE_LIMIT_ENABLED = os.environ.get("RATE_LIMIT_ENABLED", "1") not in (
+    "0",
+    "false",
+    "False",
+    "no",
+)
+# Квиз: оценка перебирает весь каталог и тянет ленту. Живому человеку
+# 30 расчётов в минуту за глаза, скрипту-переборщику — нет.
+RATE_LIMIT_QUIZ = int(os.environ.get("RATE_LIMIT_QUIZ", "30"))
+RATE_LIMIT_QUIZ_WINDOW = int(os.environ.get("RATE_LIMIT_QUIZ_WINDOW", "60"))
+# `refresh=1` заставляет сервис идти в сеть: лента — это 11 источников,
+# погода — 18 городов, море — 15 точек. Кнопку «Обновить» нажимают
+# руками, поэтому лимит на 5 минут, а не на минуту.
+RATE_LIMIT_REFRESH = int(os.environ.get("RATE_LIMIT_REFRESH", "6"))
+RATE_LIMIT_REFRESH_WINDOW = int(os.environ.get("RATE_LIMIT_REFRESH_WINDOW", "300"))
+# Сколько клиентов держим в памяти: защита от раздувания на общем NAT
+# и от сканирования. Самые давние ключи вытесняются.
+RATE_LIMIT_MAX_KEYS = int(os.environ.get("RATE_LIMIT_MAX_KEYS", "5000"))
+# За своим reverse-proxy реальный адрес клиента — первый в X-Forwarded-For.
+# Чужому клиенту заголовок верить нельзя (подделывается одной строкой),
+# поэтому по умолчанию доверяем только адресу соединения; в compose
+# прокси свой, там TRUST_PROXY=1.
+TRUST_PROXY = os.environ.get("TRUST_PROXY", "0") in ("1", "true", "True", "yes")
+
 # Заголовок должен быть ASCII (httpx кодирует header'ы ascii/latin-1).
 USER_AGENT = (
     "CrimeaGuideBot/1.0 (tourism news aggregator for Crimea; FastAPI + feedparser)"
@@ -67,4 +95,4 @@ CSP = (
     f"frame-ancestors {CSP_FRAME_ANCESTORS}"
 )
 
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.6.0"
