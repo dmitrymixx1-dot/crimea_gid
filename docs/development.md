@@ -146,7 +146,7 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 - **Проверить сценарий выката без сервера?**
   `DRY_RUN=1 APP_DIR=$PWD ./deploy/deploy.sh HEAD` — репетиция: проверки
   и план, ничего не меняет. С тегом сверяется и версия:
-  `EXPECT_VERSION=1.9.0 ./deploy/deploy.sh --dry-run HEAD`.
+  `EXPECT_VERSION=1.10.0 ./deploy/deploy.sh --dry-run HEAD`.
 - **Лента «офлайн» в dev-машине?** Проверьте исходящий HTTPS
   (`curl -I https://tass.ru/rss/v2.xml`). При недоступной сети приложение
   корректно показывает снапшот — это штатный офлайн-режим.
@@ -169,8 +169,8 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 5. PR в `main`: CI обязан быть зелёным (test + docker build).
 6. Выкатить: `git pull && docker compose up -d --build` на сервере —
    подробности и бэкапы в [deploy.md](deploy.md). Если настроен
-   автодеплой, достаточно `git tag v1.9.0 && git push --tags`:
+   автодеплой, достаточно `git tag v1.10.0 && git push --tags`:
    workflow сам прогонит тесты, репетицию выката и выкатит релиз.
    До первого выката сценарий стоит проверить репетицией
-   (`./deploy/deploy.sh --dry-run v1.9.0`) или ручным запуском workflow
+   (`./deploy/deploy.sh --dry-run v1.10.0`) или ручным запуском workflow
    с `dry_run=true` — ни сервера, ни секретов для этого не нужно.

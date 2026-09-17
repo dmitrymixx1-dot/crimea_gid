@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 from app.services.load import get_attractions, get_quiz, get_snapshot, get_sources
 from app.services.recommend import (
@@ -324,6 +325,63 @@ def test_schedule_covers_every_month():
             assert covered, f"{a['id']}: месяц {month} не покрыт расписанием"
 
 
+SEASON_MONTHS = {
+    "winter": {12, 1, 2},
+    "spring": {3, 4, 5},
+    "summer": {6, 7, 8},
+    "autumn": {9, 10, 11},
+}
+
+
+def test_season_agrees_with_published_schedule():
+    """У места с расписанием `season` — не «красивое время года», а когда
+    оно работает: дворец с часами «9:00–17:00 (ноябрь–март)» обязан быть
+    в списке зимой. Иначе наши же данные спорят друг с другом — карточка
+    говорит «открыто», а квиз штрафует место на балл за несезон
+    (`recommend.py`: `score -= 1.0`) и зимой выдаёт пустой результат.
+
+    Правило двустороннее: сезона нет в расписании — нет его и в `season`
+    (обещать визит в закрытые месяцы нельзя). Места без `schedule` —
+    пляжи, мысы, водопады — остаются на совести редактора: сверять их
+    не с чем, публикуемого графика у них нет.
+    """
+    for a in get_attractions():
+        rules = a.get("schedule")
+        if rules is None:
+            continue
+        open_months = {
+            month
+            for r in rules
+            for month in range(1, 13)
+            if _month_in_range(month, r["months"])
+        }
+        covered = {s for s, months in SEASON_MONTHS.items() if months & open_months}
+        missing = covered - set(a["season"])
+        assert not missing, (
+            f"{a['id']}: по расписанию работает в {sorted(missing)}, "
+            f"а season={a['season']}"
+        )
+        extra = set(a["season"]) - covered
+        assert not extra, (
+            f"{a['id']}: season обещает {sorted(extra)}, "
+            f"но расписание в эти месяцы молчит"
+        )
+
+
+def test_every_season_and_area_has_something_to_offer():
+    """Квиз спрашивает сезон и не должен отвечать пустотой: на каждый
+    сезон — десятки мест, и в каждом районе хотя бы пара. Зимой так было
+    не всегда (8 мест на весь полуостров, Восточный — ноль), пока `season`
+    не начали выводить из расписания."""
+    for season in SEASON_MONTHS:
+        picks = [a for a in get_attractions() if season in a["season"]]
+        assert len(picks) >= 20, f"{season}: всего {len(picks)} мест"
+        areas = {a["area"] for a in picks}
+        assert areas == set(AREA_LABEL), (
+            f"{season}: нет мест в {set(AREA_LABEL) - areas}"
+        )
+
+
 def test_schedule_times_appear_in_the_human_text():
     """Главный риск расхождения: поправили текст, забыли структуру
     (или наоборот). Любое время из `schedule` обязано встречаться
@@ -472,6 +530,28 @@ def test_anchor_coordinates_are_real():
         a = items[pid]
         assert abs(a["lat"] - lat) < 0.02, f"{pid}: широта {a['lat']}"
         assert abs(a["lng"] - lng) < 0.02, f"{pid}: долгота {a['lng']}"
+
+
+def test_coordinate_bounds_in_docs_cover_the_catalog():
+    """Границы координат объявлены в `docs/data.md` и обязаны покрывать
+    каталог: заявленные когда-то 33.0–37.0 в. д. не включали Тарханкут
+    (32.49), и редактор принял бы верную точку за ошибку. Тест читает
+    документ, а не держит копию чисел — иначе сверять нечего."""
+    doc = Path(__file__).resolve().parents[1] / "docs" / "data.md"
+    bounds = {}
+    for field in ("lat", "lng"):
+        row = re.search(
+            rf"^\|\s*`{field}`\s*\|.*$", doc.read_text(encoding="utf-8"), re.M
+        )
+        assert row, f"в docs/data.md нет строки `{field}`"
+        found = re.search(r"(\d+(?:[.,]\d+)?)\s*[–-]\s*(\d+(?:[.,]\d+)?)", row.group(0))
+        assert found, f"в строке `{field}` нет диапазона: {row.group(0)}"
+        bounds[field] = tuple(float(x.replace(",", ".")) for x in found.groups())
+    for a in get_attractions():
+        for field, (low, high) in bounds.items():
+            assert low <= a[field] <= high, (
+                f"{a['id']}: {field}={a[field]} вне {low}–{high} из docs/data.md"
+            )
 
 
 def test_western_crimea_reaches_tarkhankut():
