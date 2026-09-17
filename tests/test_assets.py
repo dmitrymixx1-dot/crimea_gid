@@ -17,6 +17,7 @@ FRONT_FILES = [
     "plan-link.js",
     "catalog-link.js",
     "favs-link.js",
+    "hourly.js",
     "sw.js",
 ]
 
@@ -323,3 +324,77 @@ def test_favs_link_imports_only_known_ids():
     app = read("app.js")
     assert "state.attractions.map(a => a.id)" in app
     assert "state.favs.add(id)" in app
+
+
+# ---------------- море и купальный индекс (фаза 1.3) ----------------
+
+
+def test_home_renders_sea_block_next_to_weather():
+    app = read("app.js")
+    assert "weatherStrip()" in app and "seaStrip()" in app
+    assert 'api("/api/sea")' in app, "морской блок нечем наполнять"
+
+
+def test_bathing_verdict_is_computed_server_side():
+    """Пороги купального индекса — в app/services/marine.py (там их
+    проверяет `test_sea.py`). Вторая копия правил во фронте означала бы
+    расхождение вердикта и данных, поэтому её здесь быть не должно."""
+    app = read("app.js")
+    assert "p.verdict.code" in app, "фронт обязан рисовать серверный вердикт"
+    for name in ("WAVE_DANGER", "WAVE_ROUGH", "TEMP_COMFORT"):
+        assert name not in app, f"{name}: правила продублированы во фронте"
+
+
+def test_sea_block_does_not_invent_missing_wave():
+    """Модель может отдать только температуру воды — волну не выдумываем."""
+    app = read("app.js")
+    assert "волна: нет данных" in app
+
+
+def test_sea_block_has_an_honest_disclaimer():
+    """Морская модель считает воду в открытом море: у берега может быть
+    иначе, и об этом надо сказать честно."""
+    app = read("app.js")
+    assert "морская модель" in app.lower()
+    assert "оборудованных пляжах" in app
+
+
+# ---------------- почасовой прогноз (фаза 1.4) ----------------
+
+
+def test_hourly_module_is_umd_and_wired():
+    src = read("hourly.js")
+    assert "module.exports" in src and "root.Hourly" in src
+    assert '"/static/hourly.js"' in read("sw.js")
+    assert 'src="/static/hourly.js"' in read("index.html")
+    assert "Hourly.next" in read("app.js")
+
+
+def test_hourly_window_uses_crimea_time_like_open_now():
+    """Ответ API живёт в кэше до часа: «сейчас» отсчитывает клиент,
+    и считает он по Крыму, а не по поясу устройства."""
+    src = read("hourly.js")
+    assert "TZ_OFFSET_MIN = 3 * 60" in src
+    assert "getTimezoneOffset" in src
+    app = read("app.js")
+    assert "Hourly.next(city.hourly, new Date())" in app
+
+
+def test_hourly_block_is_native_details_without_js_toggle():
+    """CSP запрещает inline-обработчики, а <details> даёт раскрытие
+    бесплатно — вместе с клавиатурой и скринридерами."""
+    app = read("app.js")
+    assert '<details class="w-hours">' in app
+    assert "<summary>По часам</summary>" in app
+    # Раскрытие не требует обработчиков клика вокруг блока.
+    block = app[app.index("function hourlyStrip") : app.index("function weatherStrip")]
+    assert "addEventListener" not in block
+
+
+def test_hourly_precip_hint_lives_in_the_module():
+    """Порог «💧 от 30%» — правило модуля, а не строчка во фронте."""
+    app = read("app.js")
+    assert "precipLabel" in app
+    block = app[app.index("function hourlyStrip") : app.index("function weatherStrip")]
+    assert ">=" not in block.replace("h.precipLabel ?", "")  # порог не дублируется
+    assert "PRECIP_HINT" in read("hourly.js")

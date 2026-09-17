@@ -28,6 +28,7 @@ jobs:
           node --check static/catalog-link.js
           node --check static/catalog-page.js
           node --check static/open-now.js
+          node --check static/hourly.js
           node --check static/favs-link.js
           node --check static/sw.js
       - name: JS unit tests

@@ -342,6 +342,49 @@ button { font: inherit; cursor: pointer; }
   background: #f2f7f9; border-radius: 8px; padding: 3px 7px; white-space: nowrap;
 }
 
+/* почасовой прогноз в карточке города: <details> без JS-обработчиков */
+.w-hours { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 6px; }
+.w-hours summary {
+  cursor: pointer; font-size: 12px; font-weight: 700; color: var(--sea-dark);
+  list-style: none; display: flex; align-items: center; gap: 6px;
+}
+.w-hours summary::-webkit-details-marker { display: none; }
+.w-hours summary::before { content: "▸"; font-size: 10px; transition: transform 0.15s; }
+.w-hours[open] summary::before { transform: rotate(90deg); }
+.w-hourly {
+  display: flex; gap: 8px; margin-top: 8px; overflow-x: auto;
+  padding-bottom: 4px; scrollbar-width: thin;
+}
+.w-hour {
+  flex: 0 0 auto; min-width: 54px; text-align: center;
+  background: #f2f7f9; border-radius: 10px; padding: 6px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.w-hour-now { background: var(--sea-soft); }
+.w-hour-t { font-size: 10.5px; font-weight: 600; color: var(--muted); }
+.w-hour-v { font-size: 12.5px; font-weight: 700; }
+.w-hour-p { font-size: 10.5px; color: #2f6ba8; }
+.w-hourly-note { font-size: 11px; color: var(--muted); margin: 8px 0 0; }
+
+/* ---------- море и купание ---------- */
+.sea-strip { margin-top: 0; }
+.sea-city { border-left: 3px solid var(--sea-soft); }
+.sea-best { margin: 0 0 12px; font-size: 14px; }
+.sea-best b { color: var(--sea-dark); }
+.sea-wave { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.sea-verdict {
+  font-size: 12px; font-weight: 700; border-radius: 8px; padding: 4px 8px;
+  background: var(--sea-soft); color: var(--sea-dark); display: inline-block;
+}
+.sea-verdict.sea-comfort { background: #e3f6ec; color: #1d7a51; }
+.sea-verdict.sea-ok { background: var(--sea-soft); color: var(--sea-dark); }
+.sea-verdict.sea-cool { background: #eaf2fb; color: #2f6ba8; }
+.sea-verdict.sea-cold { background: #f2f4f7; color: #5d7689; }
+.sea-verdict.sea-rough { background: var(--sun-soft); color: #9a6412; }
+.sea-verdict.sea-danger { background: #fdeaea; color: var(--danger); }
+.sea-verdict.sea-no_data { background: var(--sea-soft); color: var(--sea-dark); }
+.sea-note { font-size: 12.5px; margin: 12px 0 0; }
+
 /* ---------- favorites ---------- */
 .fav-btn {
   position: absolute; top: 10px; left: 10px; z-index: 2;

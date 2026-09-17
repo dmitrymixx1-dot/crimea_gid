@@ -20,6 +20,8 @@ def test_defaults_are_sane(monkeypatch):
         "NEWS_HTTP_TIMEOUT",
         "WEATHER_TTL",
         "WEATHER_HTTP_TIMEOUT",
+        "MARINE_TTL",
+        "MARINE_HTTP_TIMEOUT",
     ):
         monkeypatch.delenv(var, raising=False)
     importlib.reload(config)  # читаем чистое окружение
@@ -29,6 +31,10 @@ def test_defaults_are_sane(monkeypatch):
         assert config.NEWS_HTTP_TIMEOUT == 10
         assert config.WEATHER_TTL == 3600
         assert config.WEATHER_HTTP_TIMEOUT == 8
+        # Море обновляют реже погоды: волновая модель — раз в 12 ч,
+        # температура поверхности воды — раз в сутки.
+        assert config.MARINE_TTL == 3 * 60 * 60
+        assert config.MARINE_HTTP_TIMEOUT == 8
         assert config.MAX_NEWS_ITEMS > 0
     finally:
         monkeypatch.undo()
@@ -63,6 +69,14 @@ def test_env_override(monkeypatch):
 def test_open_meteo_url():
     assert config.OPEN_METEO_URL.startswith("https://")
     assert "open-meteo.com" in config.OPEN_METEO_URL
+
+
+def test_marine_url_is_open_meteo_marine():
+    """Море — отдельный хост Open-Meteo Marine, ключа тоже не требует."""
+    assert config.MARINE_URL.startswith("https://")
+    assert "open-meteo.com" in config.MARINE_URL
+    assert "/marine" in config.MARINE_URL
+    assert config.MARINE_URL != config.OPEN_METEO_URL
 
 
 def test_version_is_consistent_everywhere():

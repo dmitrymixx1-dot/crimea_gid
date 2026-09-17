@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from .config import APP_VERSION, CSP, SITE_ORIGIN, STATIC_DIR
 from .services.load import get_attractions, get_quiz
+from .services.marine import SEA_IDS, sea_service
 from .services.news import news_service
 from .services.recommend import TAGS, TYPE_META, evaluate
 from .services.weather import CITY_IDS, weather_service
@@ -134,6 +135,25 @@ async def weather(city: str | None = None, refresh: bool = False):
     if city is not None and city not in CITY_IDS:
         raise HTTPException(status_code=404, detail=f"город «{city}» не найден")
     return await weather_service.get(city=city, refresh=refresh)
+
+
+@app.get("/api/sea")
+async def sea(city: str | None = None, refresh: bool = False):
+    """Купальный индекс: температура воды и волна у курортов.
+
+    Купальный вердикт считает сервер (`services/marine.py`) — он не
+    зависит от часового пояса устройства, в отличие от «открыто сейчас».
+    """
+    if city is not None and city not in SEA_IDS:
+        # Разные причины 404 — разный текст: у Симферополя моря нет вовсе,
+        # а «gotham» не город погоды.
+        detail = (
+            f"город «{city}» без выхода к морю"
+            if city in CITY_IDS
+            else f"морская точка «{city}» не найдена"
+        )
+        raise HTTPException(status_code=404, detail=detail)
+    return await sea_service.get(city=city, refresh=refresh)
 
 
 # --------------------------------------------------------------------------

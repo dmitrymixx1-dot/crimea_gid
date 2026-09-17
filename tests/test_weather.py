@@ -10,7 +10,15 @@ import time
 
 import pytest
 
-from app.services.weather import CITIES, WEEKDAYS, WeatherService, _code_info
+from app.services.weather import (
+    CITIES,
+    HOURLY_HOURS,
+    WEEKDAYS,
+    WeatherService,
+    _code_info,
+    _number,
+    hourly_window,
+)
 
 # --------------------------------------------------------------------------
 # _code_info: WMO-коды → (эмодзи, подпись)
@@ -112,6 +120,29 @@ def test_fetch_city_parses_current():
     assert out["current"]["wind"] == 12  # 12.4 → округление
 
 
+def test_fetch_city_includes_hourly_and_requests_it():
+    svc = WeatherService()
+    client = _FakeClient({**OPEN_METEO_SAMPLE, "hourly": _hourly_payload()})
+    out = _fetch(svc, client)
+    _, params = client.calls[0]
+    assert "temperature_2m" in params["hourly"]
+    assert "precipitation_probability" in params["hourly"]
+    assert "weather_code" in params["hourly"]
+    assert isinstance(out["hourly"], list)
+
+
+def test_fetch_city_hourly_window_follows_current_time():
+    svc = WeatherService()
+    payload = {
+        **OPEN_METEO_SAMPLE,
+        "current": {**OPEN_METEO_SAMPLE["current"], "time": "2026-09-17T12:15"},
+        "hourly": _hourly_payload(),
+    }
+    out = _fetch(svc, _FakeClient(payload))
+    assert out["hourly"][0]["t"] == "2026-09-17T12:00"
+    assert len(out["hourly"]) == HOURLY_HOURS
+
+
 def test_fetch_city_sends_city_coordinates():
     svc = WeatherService()
     client = _FakeClient(OPEN_METEO_SAMPLE)
@@ -171,6 +202,125 @@ def test_fetch_city_handles_short_daily_arrays():
     assert out["forecast"][1]["max"] is None
     assert out["forecast"][1]["min"] is None
     assert out["forecast"][1]["emoji"] == "🌡️"
+
+
+# --------------------------------------------------------------------------
+# hourly_window: почасовой прогноз от текущего часа города
+# --------------------------------------------------------------------------
+
+
+def _hourly_payload(hours=30, start_hour=10, day="2026-09-17"):
+    """Ответ модели: часы подряд от start_hour, время локальное для города."""
+    times, temps, codes, precips = [], [], [], []
+    for i in range(hours):
+        h = start_hour + i
+        d, hh = day, h
+        if h >= 24:  # переходим на следующие сутки
+            d, hh = "2026-09-18", h - 24
+        times.append(f"{d}T{hh:02d}:00")
+        temps.append(20.0 + i * 0.5)  # половина градуса — есть что округлять
+        codes.append(0 if i % 3 else 61)
+        precips.append(50.0 if i % 2 == 0 else 5.0)
+    return {
+        "time": times,
+        "temperature_2m": temps,
+        "weather_code": codes,
+        "precipitation_probability": precips,
+    }
+
+
+def test_hourly_window_starts_at_current_hour():
+    """current.time = 12:15 — час 12:00 уже идёт, окно начинается с него."""
+    hours = hourly_window(_hourly_payload(), "2026-09-17T12:15")
+    assert hours[0]["t"] == "2026-09-17T12:00"
+    assert len(hours) == HOURLY_HOURS == 24
+    assert hours[-1]["t"] == "2026-09-18T11:00"
+
+
+def test_hourly_window_rounds_temperature_and_precip():
+    hours = hourly_window(_hourly_payload(), "2026-09-17T10:05")
+    assert hours[0]["temp"] == 20
+    assert hours[2]["temp"] == 21  # 21.0
+    assert hours[1]["temp"] == 20  # 20.5 → банковское округление (как и в °C)
+    assert hours[0]["precip"] == 50
+    assert hours[1]["precip"] == 5
+    assert hours[0]["emoji"] == "🌦️"  # код 61 — небольшой дождь
+    assert hours[1]["emoji"] == "☀️"
+
+
+def test_hourly_window_accepts_limit():
+    hours = hourly_window(_hourly_payload(), "2026-09-17T10:05", limit=3)
+    assert [h["t"] for h in hours] == [
+        "2026-09-17T10:00",
+        "2026-09-17T11:00",
+        "2026-09-17T12:00",
+    ]
+
+
+def test_hourly_window_without_current_time_falls_back_to_start():
+    """Модель не сказала, который час — отдаём прогноз как есть: окно
+    по факту отсекает фронт по крымскому времени."""
+    hours = hourly_window(_hourly_payload(), None)
+    assert hours[0]["t"] == "2026-09-17T10:00"
+    assert len(hours) == HOURLY_HOURS
+
+
+def test_hourly_window_stale_forecast_is_empty():
+    """current опережает прогноз (модель отстала) — пустой список честнее
+    выдуманного «сейчас» на вчерашних часах."""
+    assert hourly_window(_hourly_payload(), "2026-09-20T09:00") == []
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {},
+        {"time": []},
+        {"time": "2026-09-17T10:00"},
+        {"time": None},
+    ],
+)
+def test_hourly_window_garbage_is_safe(bad):
+    assert hourly_window(bad, "2026-09-17T12:15") == []
+
+
+def test_hourly_window_survives_short_arrays():
+    """Пропущенные значения — не повод падать: отдаём null и заглушку."""
+    payload = {
+        "time": ["2026-09-17T12:00", "2026-09-17T13:00"],
+        "temperature_2m": [21.0],
+        "weather_code": [],
+        "precipitation_probability": [None, 40],
+    }
+    hours = hourly_window(payload, "2026-09-17T12:05")
+    assert len(hours) == 2
+    assert hours[1]["temp"] is None
+    assert hours[1]["emoji"] == "🌡️"
+    assert hours[1]["precip"] == 40
+    assert hours[0]["precip"] is None
+
+
+def test_hourly_window_ignores_garbage_values():
+    payload = {
+        "time": ["2026-09-17T12:00"],
+        "temperature_2m": ["жарко"],
+        "weather_code": [None],
+        "precipitation_probability": [True],
+    }
+    hours = hourly_window(payload, "2026-09-17T12:05")
+    assert hours[0]["temp"] is None
+    assert hours[0]["precip"] is None  # bool — не вероятность осадков
+
+
+@pytest.mark.parametrize("bad", [None, "", "abc", [], {}, True])
+def test_number_rejects_garbage(bad):
+    assert _number(bad) is None
+
+
+def test_number_rounds_like_open_meteo_values():
+    assert _number(20.44) == 20
+    assert _number(20.5) == 20  # банковское округление Python, как и в °C
+    assert _number(0) == 0
 
 
 # --------------------------------------------------------------------------

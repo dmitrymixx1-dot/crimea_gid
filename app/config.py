@@ -27,6 +27,12 @@ WEATHER_TTL = int(os.environ.get("WEATHER_TTL", str(60 * 60)))
 WEATHER_HTTP_TIMEOUT = float(os.environ.get("WEATHER_HTTP_TIMEOUT", "8"))
 OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
 
+# Море: температура воды и волна. Кэш дольше погодного — волновую модель
+# обновляют раз в 12 часов, температуру поверхности воды раз в сутки.
+MARINE_TTL = int(os.environ.get("MARINE_TTL", str(3 * 60 * 60)))
+MARINE_HTTP_TIMEOUT = float(os.environ.get("MARINE_HTTP_TIMEOUT", "8"))
+MARINE_URL = "https://marine-api.open-meteo.com/v1/marine"
+
 # Заголовок должен быть ASCII (httpx кодирует header'ы ascii/latin-1).
 USER_AGENT = (
     "CrimeaGuideBot/1.0 (tourism news aggregator for Crimea; FastAPI + feedparser)"
@@ -56,4 +62,4 @@ CSP = (
     f"frame-ancestors {CSP_FRAME_ANCESTORS}"
 )
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.4.0"
