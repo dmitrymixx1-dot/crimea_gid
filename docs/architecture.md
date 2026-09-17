@@ -17,7 +17,7 @@
 app/
 ├── main.py               # FastAPI: маршруты, middleware безопасности и лимитов, SPA
 ├── config.py             # константы, переменные окружения, версия
-├── ratelimit.py          # скользящее окно на клиента → 429 + Retry-After
+├── ratelimit.py          # бюджеты ручек: скользящее окно → 429 + Retry-After
 └── services/
     ├── load.py           # загрузка JSON-данных (lru_cache)
     ├── recommend.py      # квиз → баллы → рекомендации → план по дням
@@ -31,7 +31,7 @@ static/
 ├── plan-link.js          # UMD: сериализация плана в ссылку (тестируется)
 ├── catalog-link.js       # UMD: фильтры каталога ↔ URL (тестируется)
 ├── hourly.js             # UMD: окно почасового прогноза (тестируется)
-├── rate-limit.js         # UMD: подписи ответа 429 по Retry-After (тестируется)
+├── rate-limit.js         # UMD: бюджет из X-RateLimit-* и подписи 429 (тесты)
 ├── style.css             # стили + @media print + a11y (skip-link, sr-only)
 ├── sw.js                 # service worker (офлайн-оболочка)
 └── manifest.webmanifest  # PWA-манифест
@@ -210,10 +210,15 @@ Open-Meteo Marine: current (sea_surface_temperature, wave_height)
 
 - **Лимиты** (`app/ratelimit.py`, middleware `rate_limit`): скользящее окно
   на клиента для дорогих ручек — `POST /api/quiz/evaluate` и `?refresh=1`
-  у ленты, погоды и моря. Счётчики в памяти процесса, число ключей
-  ограничено; отказ — `429` с `Retry-After` и заголовками
-  `X-RateLimit-*`. Защитные заголовки навешивает outer-middleware
-  `security_headers`, поэтому и отказ уходит с CSP.
+  у ленты, погоды и моря. Бюджет у каждой ручки свой (`rules()`), ключ
+  счётчика начинается с имени правила (`news:203.0.113.7`), и то же имя
+  уходит клиенту в `X-RateLimit-Rule` — иначе остаток одной ручки лёг бы
+  на кнопку другой. Счётчики в памяти процесса, число ключей ограничено;
+  отказ — `429` с `Retry-After` и заголовками `X-RateLimit-*`, и каждая
+  такая строка попадает в лог (нагрузку видно и без метрик —
+  `GET /api/limits` плюс `docker compose logs`). Защитные заголовки
+  навешивает outer-middleware `security_headers`, поэтому и отказ уходит
+  с CSP.
   За своим прокси клиента определяет `X-Forwarded-For` (`TRUST_PROXY=1`
   в compose; чужому клиенту заголовок верить нельзя). Uvicorn при запросе
   с доверенного `127.0.0.1` подставляет `X-Forwarded-For` в адрес клиента

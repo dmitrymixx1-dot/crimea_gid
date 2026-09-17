@@ -81,8 +81,8 @@ def test_marine_url_is_open_meteo_marine():
 
 def test_rate_limit_defaults(monkeypatch):
     """Лимиты включены по умолчанию, но «закручены» не в ноль: квиз —
-    в минуту, принудительное обновление — в пять минут (руками жмут
-    кнопку, а не скрипт). Прокси по умолчанию не свой."""
+    в минуту, принудительное обновление — своё у каждой ручки, по тому,
+    как часто её данные вообще меняются. Прокси по умолчанию не свой."""
     import importlib
 
     for var in (
@@ -91,6 +91,12 @@ def test_rate_limit_defaults(monkeypatch):
         "RATE_LIMIT_QUIZ_WINDOW",
         "RATE_LIMIT_REFRESH",
         "RATE_LIMIT_REFRESH_WINDOW",
+        "RATE_LIMIT_NEWS",
+        "RATE_LIMIT_NEWS_WINDOW",
+        "RATE_LIMIT_WEATHER",
+        "RATE_LIMIT_WEATHER_WINDOW",
+        "RATE_LIMIT_SEA",
+        "RATE_LIMIT_SEA_WINDOW",
         "RATE_LIMIT_MAX_KEYS",
         "TRUST_PROXY",
     ):
@@ -100,8 +106,15 @@ def test_rate_limit_defaults(monkeypatch):
         assert config.RATE_LIMIT_ENABLED is True
         assert config.RATE_LIMIT_QUIZ == 30
         assert config.RATE_LIMIT_QUIZ_WINDOW == 60
-        assert config.RATE_LIMIT_REFRESH == 6
-        assert config.RATE_LIMIT_REFRESH_WINDOW == 300
+        # Лента: кнопка «Обновить» под рукой у человека, кэш 15 минут.
+        assert config.RATE_LIMIT_NEWS == 6
+        assert config.RATE_LIMIT_NEWS_WINDOW == 300
+        # Погода: модель обновляется раз в час, чаще 15 минут незачем.
+        assert config.RATE_LIMIT_WEATHER == 4
+        assert config.RATE_LIMIT_WEATHER_WINDOW == 900
+        # Море: волновую модель обновляют раз в 12 часов, воду — раз в сутки.
+        assert config.RATE_LIMIT_SEA == 3
+        assert config.RATE_LIMIT_SEA_WINDOW == 1800
         assert config.RATE_LIMIT_MAX_KEYS > 0
         assert config.TRUST_PROXY is False
     finally:
@@ -114,12 +127,42 @@ def test_rate_limit_env_override(monkeypatch):
 
     monkeypatch.setenv("RATE_LIMIT_ENABLED", "0")
     monkeypatch.setenv("RATE_LIMIT_QUIZ", "5")
+    monkeypatch.setenv("RATE_LIMIT_NEWS", "2")
+    monkeypatch.setenv("RATE_LIMIT_SEA_WINDOW", "60")
     monkeypatch.setenv("TRUST_PROXY", "1")
     importlib.reload(config)
     try:
         assert config.RATE_LIMIT_ENABLED is False
         assert config.RATE_LIMIT_QUIZ == 5
+        assert config.RATE_LIMIT_NEWS == 2
+        assert config.RATE_LIMIT_SEA_WINDOW == 60
+        # Соседние ручки своими значениями не задеты.
+        assert config.RATE_LIMIT_WEATHER == 4
         assert config.TRUST_PROXY is True
+    finally:
+        monkeypatch.undo()
+        importlib.reload(config)
+
+
+def test_rate_limit_legacy_refresh_var_still_works(monkeypatch):
+    """Старые `.env` знали один общий `RATE_LIMIT_REFRESH` на три ручки.
+    Он и сейчас работает фолбэком — конфигурацию деплоя переписывать
+    не нужно, — но своя переменная ручки важнее общей."""
+    import importlib
+
+    monkeypatch.delenv("RATE_LIMIT_NEWS", raising=False)
+    monkeypatch.delenv("RATE_LIMIT_WEATHER", raising=False)
+    monkeypatch.delenv("RATE_LIMIT_SEA", raising=False)
+    monkeypatch.setenv("RATE_LIMIT_REFRESH", "2")
+    monkeypatch.setenv("RATE_LIMIT_REFRESH_WINDOW", "120")
+    monkeypatch.setenv("RATE_LIMIT_SEA", "9")
+    importlib.reload(config)
+    try:
+        assert config.RATE_LIMIT_NEWS == 2
+        assert config.RATE_LIMIT_NEWS_WINDOW == 120
+        assert config.RATE_LIMIT_WEATHER == 2
+        assert config.RATE_LIMIT_SEA == 9, "своя переменная важнее общей"
+        assert config.RATE_LIMIT_QUIZ == 30, "квиз жил и живёт отдельно"
     finally:
         monkeypatch.undo()
         importlib.reload(config)

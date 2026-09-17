@@ -50,10 +50,16 @@ const state = {
   // из неё уже нарисовано (см. static/catalog-page.js).
   catItems: [],
   catShown: 0,
+  // Бюджеты лимитируемых ручек по имени правила (X-RateLimit-*):
+  // сервер сам говорит, сколько осталось, — не нужно ждать 429,
+  // чтобы это узнать, и у каждой ручки бюджет свой.
+  budgets: {},
 };
 
 // Наблюдатель догрузки живёт вне state: это ресурс DOM, а не данные.
 let catObserver = null;
+// Таймер «кнопка отдыхает до открытия окна» — тоже ресурс DOM.
+let cooldownTimer = null;
 
 /* ---------------- favorites ---------------- */
 function loadFavs() {
@@ -73,6 +79,17 @@ function toggleFav(id) {
 /* ---------------- utils ---------------- */
 async function api(url, opts) {
   const res = await fetch(url, opts);
+  // На лимитируемых ручках сервер шлёт X-RateLimit-* и на успехе,
+  // и на отказе: запоминаем бюджет (с возрастом — окно заканчивается),
+  // чтобы не тратить его вслепую (см. coolDown и budgetHint).
+  const budget = RateLimit.readBudget(res.headers);
+  if (budget && budget.rule) {
+    state.budgets[budget.rule] = {
+      ...budget,
+      retryAfter: RateLimit.parseRetryAfter(res.headers.get("Retry-After")),
+      at: Date.now(),
+    };
+  }
   if (!res.ok) {
     const err = new Error(`${res.status} ${res.statusText}`);
     err.status = res.status;
@@ -82,6 +99,37 @@ async function api(url, opts) {
     throw err;
   }
   return res.json();
+}
+
+/** Кнопка «отдыхает» до открытия окна: пока бюджет пуст, запрос всё равно
+    кончится отказом, а окно от этого не откроется быстрее.
+    `prefix` — иконка кнопки (у «Далее» её нет). */
+function coolDown(btn, seconds, idleText, prefix = "↻ ") {
+  if (!btn || !seconds) return;
+  clearTimeout(cooldownTimer);
+  btn.disabled = true;
+  const wait = RateLimit.waitText(seconds);
+  btn.textContent = wait ? `${prefix}${wait}` : idleText;
+  cooldownTimer = setTimeout(() => {
+    cooldownTimer = null;
+    btn.disabled = false;
+    btn.textContent = idleText;
+  }, seconds * 1000);
+}
+
+/** Свежий бюджет правила: прочитанный слишком давно — вранье (окно уже
+    могло открыться), поэтому такой не показываем и не считаем. */
+function freshBudget(rule) {
+  const b = state.budgets[rule];
+  if (!b) return null;
+  const age = (Date.now() - b.at) / 1000;
+  if (b.reset !== null && age > b.reset) return null;
+  return b;
+}
+
+/** Подпись остатка бюджета для шапки ленты (пустая строка — молчим). */
+function budgetHint() {
+  return RateLimit.budgetText(freshBudget("news"));
 }
 
 /** Текст ошибки запроса: на 429 — человеческое «попробуйте через N». */
@@ -666,6 +714,14 @@ async function submitQuiz() {
   } catch (e) {
     toast(apiErrorText(e, "Не удалось посчитать рекомендации"));
     if (btn) { btn.disabled = false; btn.textContent = "Далее →"; }
+    // Исчерпанный лимит квиза: кнопка возвращается в строй вместе
+    // с окном, а не сразу — иначе следующий клик снова получит 429.
+    coolDown(
+      btn,
+      RateLimit.cooldownSeconds(freshBudget("quiz"), e.retryAfter),
+      "Далее →",
+      ""
+    );
   }
 }
 
@@ -849,6 +905,7 @@ async function renderNews(refresh = false) {
           <div class="news-status">
             <span id="news-badge" class="badge badge-muted">загружаем…</span>
             <span class="muted" id="news-upd"></span>
+            <span class="muted" id="news-budget" title="Бюджет принудительных обновлений ленты"></span>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -882,14 +939,31 @@ async function renderNews(refresh = false) {
     else if (!state.news) await loadNews();
   } catch (e) {
     // Кнопку «Обновить» возвращаем в рабочий вид: иначе после 429 она
-    // осталась бы мёртвой до перерисовки экрана.
+    // осталась бы мёртвой до перерисовки экрана. Если сервер сказал,
+    // сколько ждать, — отдыхаем ровно столько: второй отказ ничего не даёт.
     state.newsLoading = false;
     const btn = $("#news-refresh");
     if (btn) { btn.disabled = false; btn.textContent = "↻ Обновить"; }
+    const budget = freshBudget("news");
+    coolDown(
+      btn,
+      RateLimit.cooldownSeconds(budget, e.retryAfter),
+      "↻ Обновить"
+    );
     const text = apiErrorText(e, `Не удалось получить новости: ${e.message}`);
     $("#news-list").innerHTML = `<div class="empty"><div class="big">⚠️</div>${esc(text)}</div>`;
     return;
   }
+  // Остаток бюджета — рядом с кнопкой: сервер его уже сказал, а гасить
+  // кнопку на исчерпанном бюджете выгоднее, чем ждать 429.
+  const budgetEl = $("#news-budget");
+  if (budgetEl) budgetEl.textContent = budgetHint();
+  const newsBudget = freshBudget("news");
+  coolDown(
+    $("#news-refresh"),
+    RateLimit.cooldownSeconds(newsBudget, newsBudget && newsBudget.retryAfter),
+    "↻ Обновить"
+  );
   renderNewsBody();
 }
 

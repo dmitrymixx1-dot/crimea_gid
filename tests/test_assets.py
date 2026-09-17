@@ -500,6 +500,40 @@ def test_rate_limit_module_is_umd_and_wired():
     assert "RateLimit.message" in app
 
 
+def test_frontend_reads_the_budget_instead_of_waiting_for_429():
+    """Бюджет у каждой ручки свой, и фронт его знает: гасит кнопку до
+    открытия окна, а не выбивает второй 429 подряд."""
+    app = read("app.js")
+    assert "RateLimit.readBudget(res.headers)" in app
+    # Бюджеты складываются по имени правила, а не в одну переменную.
+    assert "state.budgets[budget.rule]" in app
+    assert "function coolDown(" in app and "function freshBudget(" in app
+    news_block = app[
+        app.index("async function renderNews") : app.index("function renderNewsBody")
+    ]
+    assert 'freshBudget("news")' in news_block
+    assert "function budgetHint()" in app
+    assert 'budgetText(freshBudget("news"))' in app or "budgetHint()" in news_block
+    # Квиз после отказа тоже отдыхает: повторный клик не тратит бюджет впустую.
+    quiz_block = app[
+        app.index("async function submitQuiz") : app.index("const SLOT_META")
+    ]
+    assert "coolDown(" in quiz_block
+
+
+def test_limit_budgets_are_documented_per_route():
+    """Бюджеты видно и в докладе (`docs/api.md`), и в `.env.example`:
+    настроить лимит, не зная, чей он, нельзя."""
+    root = STATIC_DIR.parent
+    api = (root / "docs" / "api.md").read_text(encoding="utf-8")
+    for name in ("RATE_LIMIT_NEWS", "RATE_LIMIT_WEATHER", "RATE_LIMIT_SEA"):
+        assert name in api, f"в docs/api.md нет {name}"
+    assert "/api/limits" in api, "ручка со бюджетами не задокументирована"
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    for name in ("RATE_LIMIT_NEWS", "RATE_LIMIT_WEATHER", "RATE_LIMIT_SEA"):
+        assert name in readme, f"в README нет {name}"
+
+
 def test_rate_limit_error_is_shown_instead_of_raw_status():
     """Квиз и «Обновить» новостей обязаны объяснять 429 по-человечески."""
     app = read("app.js")
@@ -525,18 +559,37 @@ def test_compose_trusts_its_own_proxy():
     # передаётся и что по умолчанию прокси считается своим.
     assert env["TRUST_PROXY"] == "${TRUST_PROXY:-1}"
     assert env["RATE_LIMIT_ENABLED"] == "${RATE_LIMIT_ENABLED:-1}"
-    assert "RATE_LIMIT_QUIZ" in env and "RATE_LIMIT_REFRESH" in env
+    # Бюджет каждой refresh-ручки передаётся отдельно: в контейнере
+    # лимиты не должны схлопываться в одно общее число.
+    for var in (
+        "RATE_LIMIT_QUIZ",
+        "RATE_LIMIT_NEWS",
+        "RATE_LIMIT_NEWS_WINDOW",
+        "RATE_LIMIT_WEATHER",
+        "RATE_LIMIT_WEATHER_WINDOW",
+        "RATE_LIMIT_SEA",
+        "RATE_LIMIT_SEA_WINDOW",
+    ):
+        assert var in env, f"compose не передаёт {var}"
 
 
 def test_env_example_documents_rate_limits():
-    text = (STATIC_DIR.parent / ".env.example").read_text("utf-8")
+    text = (STATIC_DIR.parent / ".env.example").read_text(encoding="utf-8")
     for var in (
         "RATE_LIMIT_ENABLED",
         "RATE_LIMIT_QUIZ",
-        "RATE_LIMIT_REFRESH",
+        "RATE_LIMIT_NEWS",
+        "RATE_LIMIT_NEWS_WINDOW",
+        "RATE_LIMIT_WEATHER",
+        "RATE_LIMIT_WEATHER_WINDOW",
+        "RATE_LIMIT_SEA",
+        "RATE_LIMIT_SEA_WINDOW",
         "TRUST_PROXY",
     ):
         assert var in text, f"в .env.example нет {var}"
+    # Общая переменная осталась фолбэком для старых деплоев — и об этом
+    # в файле сказано, а не просто «её больше нет».
+    assert "RATE_LIMIT_REFRESH" in text and "фолбэк" in text
 
 
 def deploy_workflow():

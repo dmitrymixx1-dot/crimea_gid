@@ -27,13 +27,13 @@ for f in static/*.js; do node --check "$f"; done   # синтаксис всех
 .venv/bin/ruff check app tests              # линтер
 ```
 
-**350 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
-плюс **78 JS-тестов** (`tests/js/`, `node:test` без зависимостей):
+**365 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
+плюс **89 JS-тестов** (`tests/js/`, `node:test` без зависимостей):
 
 | Модуль | Что покрывает |
 |---|---|
 | `test_api.py` | эндпоинты, фильтры (в т.ч. `tag=extreme`, `area=Западный`), заголовки безопасности и CSP, рендер Open Graph (origin из env/`X-Forwarded-*`), a11y-каркас, PWA-маршруты, контракт 422 (квиз) / 404 (погода) |
-| `test_ratelimit.py` | лимиты: скользящее окно и `Retry-After`, заголовки `X-RateLimit-*` на дорогих ручках, `429` на квизе и `?refresh=1`, бесплатность обычного чтения, раздельный счёт клиентов по `X-Forwarded-For` (`TRUST_PROXY`) |
+| `test_ratelimit.py` | лимиты: скользящее окно и `Retry-After`, заголовки `X-RateLimit-*` и имя правила, `429` на квизе и `?refresh=1`, **раздельные бюджеты ручек** (исчерпанная лента не занимает бюджет погоды), счётчики нагрузки и `GET /api/limits`, строка в логе на каждый отказ, бесплатность обычного чтения, раздельный счёт клиентов по `X-Forwarded-For` (`TRUST_PROXY`) |
 | `test_assets.py` | аудит статики: бюджет веса и размеры картинок, отсутствие inline-обработчиков и пустых `alt`, внешние `<script>`, согласованность SW/манифеста, прод-конфигурация (`docker-compose.yml`, `Caddyfile`, скрипты бэкапа) |
 | `test_data.py` | схемы данных, границы координат, **якорные координаты** (`ANCHORS` — сверено с OSM), объём каталога и покрытие районов, согласованность каталога/квиза со словарями кода и `QuizIn`, покрытие всех `TAGS` в `quiz.purpose`/`PROFILES`/`PURPOSE_TOPICS`, источники, файлы картинок типов |
 | `test_load.py` | загрузчик JSON: схемы, кэширование, ошибка на отсутствующий файл |
@@ -102,7 +102,7 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 | Новый RSS-источник | строка в `sources.json`, `"type": "rss"` | `test_data.py::test_sources_urls_unique` |
 | Новый TG-канал | строка в `sources.json`, `"type": "telegram"`, url `https://t.me/s/<канал>` (только публичные) | то же |
 | Новый город погоды | кортеж в `CITIES` (`app/services/weather.py`) | `test_weather.py` |
-| Новый лимит | правило в `match_rule` (`app/ratelimit.py`) + дефолт в `config.py`; подписи отказа — `static/rate-limit.js` | `test_ratelimit.py`, `tests/js/rate-limit.test.js` |
+| Новый лимит | `Rule` в `rules()` (`app/ratelimit.py`) + дефолт в `config.py`, строка в `.env.example` и `docker-compose.yml`, таблица в [docs/api.md](api.md#ограничение-частоты-запросов); подписи отказа — `static/rate-limit.js` | `test_ratelimit.py`, `test_config.py`, `test_assets.py`, `tests/js/rate-limit.test.js` |
 | Новый шаг деплоя | `deploy/deploy.sh` (исполняется на сервере) + шаг в `.github/workflows/deploy.yml`; секреты — только в GitHub | `test_assets.py::test_deploy_*` |
 | Новое поле прогноза | параметр в `_fetch_city` (`hourly=…`) + разбор в `hourly_window()`; показ — `static/hourly.js` (правило окна держат JS-тесты) | `test_weather.py`, `tests/js/hourly.test.js` |
 | Новая морская точка | кортеж в `SEA_POINTS` (`app/services/marine.py`), id — как у курорта в `CITIES`, координаты — в открытой воде в 1–8 км от города | `test_sea.py` |
@@ -126,8 +126,10 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 ## Отладка
 
 - **Ответ 429 в dev?** Лимиты действуют и локально: квиз — 30 расчётов
-  в минуту, `?refresh=1` — 6 за 5 минут. Для бэнчмарков и ручных прогонов
-  ставьте `RATE_LIMIT_ENABLED=0`.
+  в минуту, `?refresh=1` — свой бюджет у каждой ручки (лента 6 за 5 минут,
+  погода 4 за 15, море 3 за 30). Для бэнчмарков и ручных прогонов ставьте
+  `RATE_LIMIT_ENABLED=0`; посмотреть текущие бюджеты и нагрузку —
+  `curl -s localhost:8000/api/limits`.
 - **Лента «офлайн» в dev-машине?** Проверьте исходящий HTTPS
   (`curl -I https://tass.ru/rss/v2.xml`). При недоступной сети приложение
   корректно показывает снапшот — это штатный офлайн-режим.
@@ -147,5 +149,5 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 4. PR в `main`: CI обязан быть зелёным (test + docker build).
 5. Выкатить: `git pull && docker compose up -d --build` на сервере —
    подробности и бэкапы в [deploy.md](deploy.md). Если настроен
-   автодеплой, достаточно `git tag v1.6.0 && git push --tags`:
+   автодеплой, достаточно `git tag v1.7.0 && git push --tags`:
    workflow сам прогонит тесты и выкатит релиз.

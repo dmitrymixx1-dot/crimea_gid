@@ -17,10 +17,16 @@ services:
       NEWS_CACHE_TTL: "${NEWS_CACHE_TTL:-900}"
       WEATHER_TTL: "${WEATHER_TTL:-3600}"
       CSP_FRAME_ANCESTORS: "${CSP_FRAME_ANCESTORS:-'self'}"
-      # Лимиты на дорогие ручки (квиз и refresh=1).
+      # Лимиты на дорогие ручки (квиз и refresh=1). Бюджет у каждой
+      # refresh-ручки свой: лента, погода и море стоят по-разному.
       RATE_LIMIT_ENABLED: "${RATE_LIMIT_ENABLED:-1}"
       RATE_LIMIT_QUIZ: "${RATE_LIMIT_QUIZ:-30}"
-      RATE_LIMIT_REFRESH: "${RATE_LIMIT_REFRESH:-6}"
+      RATE_LIMIT_NEWS: "${RATE_LIMIT_NEWS:-6}"
+      RATE_LIMIT_NEWS_WINDOW: "${RATE_LIMIT_NEWS_WINDOW:-300}"
+      RATE_LIMIT_WEATHER: "${RATE_LIMIT_WEATHER:-4}"
+      RATE_LIMIT_WEATHER_WINDOW: "${RATE_LIMIT_WEATHER_WINDOW:-900}"
+      RATE_LIMIT_SEA: "${RATE_LIMIT_SEA:-3}"
+      RATE_LIMIT_SEA_WINDOW: "${RATE_LIMIT_SEA_WINDOW:-1800}"
       # Приложение за своим Caddy: реальный адрес клиента — первый
       # в X-Forwarded-For, иначе все гости делили бы один лимит на IP прокси.
       TRUST_PROXY: "${TRUST_PROXY:-1}"

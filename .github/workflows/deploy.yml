@@ -97,7 +97,7 @@ jobs:
           DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
           REF: ${{ github.event.inputs.ref || github.ref_name }}
         run: |
-          # Теги вида v1.6.0 → ожидаемая версия 1.6.0 (без «v»);
+          # Теги вида v1.7.0 → ожидаемая версия 1.7.0 (без «v»);
           # ветку версией не сверяем.
           case "$REF" in
             v*) expect="${REF#v}" ;;
