@@ -3,6 +3,45 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const view = $("#view");
 
+/* Английская локаль ключевых экранов (см. static/i18n.js).
+   t() — строка на текущем языке; без словаря и без ключа возвращает
+   исходник, поэтому русская речь не зависит от локали вообще.
+   Вызов нужен там, где текст не проходит через обходчик DOM: прямые
+   записи в textContent и строки с переменными — DOM отдаёт такую фразу
+   одним узлом, и ключом-фрагментом её не поймать. */
+const t = (text, params) => (typeof I18n === "undefined" ? text : I18n.translate(text, params));
+
+/* Один проход обходчика после отрисовки. На `ru` — no-op: без словаря
+   localize() ничего не трогает и стоит ноль. */
+function localize(root) {
+  if (typeof I18n !== "undefined") I18n.localize(root || document.body);
+}
+
+/* Счётчик с формой нужного языка: русские формы берём из `plural`,
+   английские передаёт вызывающий код — «1 место / 2 места» на английском
+   экране выглядело бы поломкой. */
+function nform(n, ruForms, enOne, enMany) {
+  const value = Number(n) || 0;
+  if (typeof I18n !== "undefined" && I18n.isEnglish()) {
+    return `${value} ${value === 1 ? enOne : enMany}`;
+  }
+  return `${value} ${plural(value, ruForms)}`;
+}
+
+/* Причина подбора из матч-мейкера: либо готовая фраза («Дороже, чем ваш
+   бюджет»), либо список тем после «Совпадает: ». Список переводим по
+   элементам — словарь не может знать все сочетания тем. В русской речи
+   функция возвращает строку как есть. */
+function tReason(text) {
+  const raw = String(text || "");
+  const whole = t(raw);
+  if (whole !== raw) return whole;
+  const [head, ...rest] = raw.split(": ");
+  if (!rest.length) return raw;
+  const items = rest.join(": ").split(",").map(part => t(part.trim()));
+  return `${t(head)}: ${items.join(", ")}`;
+}
+
 const TOPIC_LABELS = {
   beach: "🏖️ Пляжи", weather: "🌤️ Погода", transport: "🚗 Транспорт",
   events: "🎉 События", food: "🍷 Гастро", safety: " Безопасность",
@@ -31,6 +70,10 @@ document.addEventListener("error", e => {
 
 const state = {
   meta: { tags: {}, types: {} },
+  // Речь экрана и пакет перевода (`static/i18n/en.json`). Русский —
+  // родной: state.labels = null, словарь не качаем и не держим в памяти.
+  lang: "ru",
+  labels: null,
   attractions: [],
   areas: [],
   quiz: null,
@@ -60,6 +103,116 @@ const state = {
 let catObserver = null;
 // Таймер «кнопка отдыхает до открытия окна» — тоже ресурс DOM.
 let cooldownTimer = null;
+
+/* ---------------- язык ---------------- */
+/* Английский экран держится на бандле `static/i18n/en.json`: словарь
+   подписей плюс переводы мест и квиза. Русскому бандл не нужен вовсе,
+   поэтому мы его не качаем — 99 % трафика не платит за чужую локаль.
+
+   Бандл приходит по первому требованию и переключается на месте: данные
+   (каталог, результат квиза) переукладываются, а не запрошиваются —
+   сервер про язык не знает и знать не должен. */
+let langBundle = null;
+
+async function ensureBundle(lang) {
+  if (lang === "ru") return null;
+  if (langBundle) return langBundle;
+  try {
+    const res = await fetch(I18n.BUNDLE_URL, { cache: "default" });
+    if (!res.ok) return null;
+    langBundle = await res.json();
+    return langBundle;
+  } catch (e) {
+    // Первый визит без сети (или недоступен кэш SW): остаёмся на русском.
+    return null;
+  }
+}
+
+function readStoredLang() {
+  try { return localStorage.getItem(I18n.STORAGE_KEY) || ""; } catch (e) { return ""; }
+}
+function storeLang(lang) {
+  try { localStorage.setItem(I18n.STORAGE_KEY, lang); } catch (e) {}
+}
+
+/* Поля места, которые переводятся из `places` бандла. `area` среди них
+   нет намеренно: он участвует в фильтрах и в URL подборки, и перевод
+   рассинхронизировал бы ссылку с данными. */
+const PLACE_FIELDS = ["name", "region", "description", "tips", "price_hint", "hours"];
+
+/** Все списки мест, которые рисует приложение: каталог + выдача квиза. */
+function labeledLists() {
+  const lists = [state.attractions];
+  const r = state.quizResult;
+  if (r) {
+    lists.push(r.recommendations);
+    lists.push(r.itinerary && r.itinerary.reserve);
+    for (const d of (r.itinerary && r.itinerary.days) || []) lists.push(d.stops);
+  }
+  return lists.filter(Array.isArray);
+}
+
+/** Наложить перевод на данные (или снять его при возврате на русский). */
+function applyLabelsToData() {
+  if (typeof I18n === "undefined") return;
+  for (const list of labeledLists()) {
+    if (state.lang === "en" && state.labels) {
+      I18n.applyLabels(list, state.labels.places, PLACE_FIELDS);
+    } else {
+      I18n.stripLabels(list, PLACE_FIELDS);
+    }
+  }
+}
+
+function renderLangToggle() {
+  const btn = $("#lang-toggle");
+  if (!btn) return;
+  const en = state.lang === "en";
+  // Кнопка называет язык, в который уводит, — а не тот, что уже горит.
+  btn.textContent = en ? "Рус" : "EN";
+  btn.setAttribute("aria-pressed", String(en));
+  btn.title = t(en ? "Переключить на русский" : "Switch to English");
+}
+
+/**
+ * Сменить речь экрана. Возвращает язык, который реально включился:
+ * без бандла английский невозможен, и мы остаёмся на русском, а не
+ * показываем половину экрана пустыми подписями.
+ */
+async function switchLang(lang) {
+  const bundle = lang === "en" ? await ensureBundle("en") : null;
+  if (lang === "en" && !bundle) {
+    toast("Английский текст не загрузился — остаёмся на русском");
+    renderLangToggle();
+    return state.lang;
+  }
+  state.lang = I18n.setLang(lang, bundle);
+  state.labels = state.lang === "en" ? bundle : null;
+  storeLang(state.lang);
+  applyLabelsToData();
+  I18n.applyDoc(document);
+  renderLangToggle();
+  localize();
+  return state.lang;
+}
+
+/* Речь по умолчанию: ссылка важнее сохранённого выбора, сохранённый —
+   настроек браузера. Язык в адресе не съедаем: #/quiz?lang=en — это
+   шарящаяся англоязычная ссылка, и получатель должен увидеть то же. */
+async function initLang() {
+  const { query } = hashParts();
+  const wanted = I18n.pickLang({
+    url: query.get("lang"),
+    stored: readStoredLang(),
+    nav: I18n.navLangs(navigator),
+  });
+  if (wanted === "ru") {
+    I18n.setLang("ru");
+    renderLangToggle();
+    return;
+  }
+  await switchLang(wanted);
+}
 
 /* ---------------- favorites ---------------- */
 function loadFavs() {
@@ -109,11 +262,11 @@ function coolDown(btn, seconds, idleText, prefix = "↻ ") {
   clearTimeout(cooldownTimer);
   btn.disabled = true;
   const wait = RateLimit.waitText(seconds);
-  btn.textContent = wait ? `${prefix}${wait}` : idleText;
+  btn.textContent = wait ? `${prefix}${t(wait)}` : t(idleText);
   cooldownTimer = setTimeout(() => {
     cooldownTimer = null;
     btn.disabled = false;
-    btn.textContent = idleText;
+    btn.textContent = t(idleText);   // окно открылось — возвращаем подпись речи
   }, seconds * 1000);
 }
 
@@ -129,19 +282,24 @@ function freshBudget(rule) {
 
 /** Подпись остатка бюджета для шапки ленты (пустая строка — молчим). */
 function budgetHint() {
-  return RateLimit.budgetText(freshBudget("news"));
+  return t(RateLimit.budgetText(freshBudget("news")));
 }
 
-/** Текст ошибки запроса: на 429 — человеческое «попробуйте через N». */
+/** Текст ошибки запроса: на 429 — человеческое «попробуйте через N».
+    Подпись модуля приходит уже собранной фразой, поэтому переводим её
+    целиком: складывания чисел в `t()` хватает и на «через 5 минут», и на
+    «через 30 с» (см. `I18n.fold`). */
 function apiErrorText(e, fallback) {
-  if (e && e.status === 429) return RateLimit.message(e.retryAfter);
+  if (e && e.status === 429) return t(RateLimit.message(e.retryAfter));
   return fallback;
 }
 
 function toast(msg, ms = 3200) {
   const el = document.createElement("div");
   el.className = "toast";
-  el.textContent = msg;
+  // Тост живёт вне `#view`, поэтому переводим строку здесь: toast() —
+  // единственная дверь, через которую сообщение попадает на экран.
+  el.textContent = t(msg);
   $("#toast-root").appendChild(el);
   setTimeout(() => el.remove(), ms);
 }
@@ -150,9 +308,12 @@ function fmtTime(iso) {
   if (!iso) return "";
   const d = new Date(iso);
   if (isNaN(d)) return "";
-  const hm = d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
-  if (d.toDateString() === new Date().toDateString()) return `сегодня, ${hm}`;
-  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+  // Locale — речи, а не устройства: «сегодня, 14:05» и «today, 2:05 pm»
+  // должны соответствовать языку экрана, а не настройкам телефона.
+  const loc = typeof I18n === "undefined" ? "ru-RU" : I18n.locale();
+  const hm = d.toLocaleTimeString(loc, { hour: "2-digit", minute: "2-digit" });
+  if (d.toDateString() === new Date().toDateString()) return t("сегодня, {hm}", { hm });
+  return d.toLocaleDateString(loc, { day: "numeric", month: "short" });
 }
 
 function tagLabel(t) { return state.meta.tags[t] || t; }
@@ -161,7 +322,9 @@ function budgetIcons(b) { return "₽".repeat(b) + `<span class="muted">${"₽".
 
 /* Осмысленный alt категорийной картинки: что изображено, без дубля
    названия места (оно и так рядом в заголовке карточки). */
-function typeAlt(meta) { return `Иллюстрация категории «${meta.label || meta.img}»`; }
+function typeAlt(meta) {
+  return t("Иллюстрация категории «{label}»", { label: meta.label || meta.img });
+}
 
 function favBtn(id) {
   return `<button class="fav-btn ${state.favs.has(id) ? "on" : ""}" data-fav="${id}"
@@ -182,11 +345,11 @@ function updateNetBadge() {
   if (state.news.online) {
     b.className = "badge badge-ok badge-dot";
     b.textContent = "live";
-    b.title = `Источники на связи. Обновлено: ${fmtTime(state.news.updated_at)}`;
+    b.title = t("Источники на связи. Обновлено: {time}", { time: fmtTime(state.news.updated_at) });
   } else {
     b.className = "badge badge-warn badge-dot";
-    b.textContent = "офлайн";
-    b.title = "RSS-ленты недоступны из вашей сети — показываем кэш";
+    b.textContent = t("офлайн");
+    b.title = t("RSS-ленты недоступны из вашей сети — показываем кэш");
   }
 }
 
@@ -212,7 +375,7 @@ function attractionCard(a) {
         <div class="card-meta">
           <span><span class="star" aria-hidden="true">★</span> <b>${a.rating.toFixed(1)}</b></span>
           <span>${budgetIcons(a.budget)}</span>
-          <span>⏱ ${a.duration_h} ч</span>
+          <span>${t("⏱ {h} ч", { h: a.duration_h })}</span>
         </div>
         ${openLabel ? `<div class="open-now">${esc(openLabel)}</div>` : ""}
       </div>
@@ -223,6 +386,10 @@ function newsItemHTML(it) {
   const topics = (it.topics || [])
     .map(t => `<span class="chip ${t === "safety" ? "chip-sun" : ""}">${TOPIC_LABELS[t] || t}</span>`)
     .join("");
+  // Заголовок и анонс — чужие тексты (RSS): их не переводим и не даём
+  // обходчику менять даже подписи внутри, поэтому data-i18n="skip" стоит
+  // на самих узлах, а не на всей карточке: бейдж издания, время и темы —
+  // наши подписи, и они обязаны переводиться (см. i18n.js).
   return `
     <div class="news-item">
       <div class="news-left">
@@ -230,8 +397,8 @@ function newsItemHTML(it) {
         <span class="news-time">${fmtTime(it.published)}</span>
       </div>
       <div class="news-body">
-        <h3 class="news-title"><a href="${esc(it.link)}" target="_blank" rel="noopener">${esc(it.title)}</a></h3>
-        ${it.summary ? `<p class="news-summary">${esc(it.summary)}</p>` : ""}
+        <h3 class="news-title" data-i18n="skip"><a href="${esc(it.link)}" target="_blank" rel="noopener">${esc(it.title)}</a></h3>
+        ${it.summary ? `<p class="news-summary" data-i18n="skip">${esc(it.summary)}</p>` : ""}
         ${topics ? `<div class="news-topics">${topics}</div>` : ""}
       </div>
     </div>`;
@@ -281,9 +448,12 @@ function seaStrip() {
 /* «волна 0,3 м · лёгкая рябь»; если модель отдала только температуру —
    волну не выдумываем. */
 function waveText(p) {
-  if (p.wave_height === null || p.wave_height === undefined) return "волна: нет данных";
+  if (p.wave_height === null || p.wave_height === undefined) return t("волна: нет данных");
   const m = String(p.wave_height).replace(".", ",");
-  return `волна ${m} м${p.wave_label ? ` · ${esc(p.wave_label)}` : ""}`;
+  // Подпись волнения приходит с сервера по-русски — переводим её той же
+  // строкой словаря: пороги вердикта живут на сервере, здесь только текст.
+  const label = p.wave_label ? ` · ${t(p.wave_label)}` : "";
+  return t("волна {m} м{label}", { m, label });
 }
 
 /* ---------------- home ---------------- */
@@ -329,7 +499,7 @@ function weatherStrip() {
       </div>
       <div class="weather-grid">
         ${cities.map(c => `
-          <div class="w-city" title="${c.current.label}, ветер ${c.current.wind} км/ч">
+          <div class="w-city" title="${esc(t("{weather}, ветер {wind} км/ч", { weather: t(c.current.label), wind: c.current.wind }))}">
             <div class="w-name">${c.name}</div>
             <div class="w-main">${c.current.emoji} <b>${fmtTemp(c.current.temp)}</b></div>
             <div class="w-forecast">
@@ -367,9 +537,9 @@ function renderHome() {
           <a class="btn btn-ghost" href="#/map">🗺 Карта</a>
         </div>
         <div class="hero-stats">
-          <span class="hero-stat">📍 ${state.attractions.length} мест</span>
-          <span class="hero-stat">❓ ${state.quiz ? state.quiz.questions.length : 7} вопросов</span>
-          <span class="hero-stat">📰 ${n ? n.sources.length : 5} источников новостей</span>
+          <span class="hero-stat">📍 ${nform(state.attractions.length, ["место", "места", "мест"], "place", "places")}</span>
+          <span class="hero-stat">❓ ${nform(state.quiz ? state.quiz.questions.length : 7, ["вопрос", "вопроса", "вопросов"], "question", "questions")}</span>
+          <span class="hero-stat">📰 ${nform(n ? n.sources.length : 5, ["источник новостей", "источника новостей", "источников новостей"], "news source", "news sources")}</span>
         </div>
       </div>
     </section>
@@ -382,14 +552,14 @@ function renderHome() {
         <span class="sub">Выберите настроение — откроется каталог по теме</span>
       </div>
       <div class="grid">
-        ${cats.map(([t, img]) => `
-          <a class="card cat-tile" href="#/catalog?tag=${t}">
+        ${cats.map(([tag, img]) => `
+          <a class="card cat-tile" href="#/catalog?tag=${tag}">
             <div class="card-img"><img src="/static/img/${img}"
-              alt="Иллюстрация категории «${esc(tagLabel(t))}»"
+              alt="${esc(t("Иллюстрация категории «{label}»", { label: tagLabel(tag) }))}"
               loading="lazy" decoding="async" data-img-fallback="remove"/></div>
             <div class="card-body">
               <h3 class="card-title">${tagLabel(t)}</h3>
-              <div class="card-region">места с тегом «${t}»</div>
+              <div class="card-region">${esc(t("места с тегом «{tag}»", { tag: tagLabel(tag) }))}</div>
             </div>
           </a>`).join("")}
       </div>
@@ -416,7 +586,7 @@ function renderHome() {
       <div class="section-head">
         <h2>❤ В избранном</h2>
         <span style="display:flex;gap:10px;align-items:center">
-          <span class="sub">${favs.length} ${plural(favs.length, ["место", "места", "мест"])} — сохранено в вашем браузере</span>
+          <span class="sub">${nform(favs.length, ["место", "места", "мест"], "place", "places")} — сохранено в вашем браузере</span>
           <button class="btn btn-outline btn-sm" id="fav-share"
             title="Скопировать ссылку на ваше избранное">🔗 Ссылка на избранное</button>
         </span>
@@ -426,6 +596,7 @@ function renderHome() {
   `;
   bindCards();
   $("#fav-share")?.addEventListener("click", copyFavsLink);
+  localize();
 }
 
 /* Счётчик по-русски: 1 место, 2 места, 5 мест. */
@@ -555,7 +726,10 @@ function renderCatGrid() {
   let items = state.attractions.filter(a =>
     (!state.f.area || a.area === state.f.area) &&
     (!state.f.tag || a.tags.includes(state.f.tag)) &&
-    (!q || a.name.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)));
+    // Поиск по обоим языкам: экран может быть английский, а запрос —
+    // набран по-русски (и наоборот). Оригиналы лежат в `<поле>_ru`.
+    (!q || [a.name, a.name_ru, a.description, a.description_ru]
+      .some(v => String(v || "").toLowerCase().includes(q))));
   // «Открыто сейчас» прячет только заведомо закрытое: у пляжей и мысов
   // расписания нет, и выбрасывать их было бы враньём (см. open-now.js).
   if (state.f.open) items = OpenNow.filterOpen(items);
@@ -580,7 +754,7 @@ function paintCatGrid() {
   const items = state.catItems || [];
   if (!items.length) {
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="big">🔍</div>Ничего не нашлось. Попробуйте убрать фильтры.</div>`;
-    $("#cat-count").textContent = CatalogPage.statusLabel(0, 0);
+    $("#cat-count").textContent = t(CatalogPage.statusLabel(0, 0));
     setCatMore(0);
     return;
   }
@@ -602,12 +776,15 @@ function appendCatCards(from) {
   updateCatTail(grid);
 }
 
-/* Общий хвост обоих путей: счётчик, обработчики карточек, кнопка догрузки. */
+/* Общий хвост обоих путей: счётчик, обработчики карточек, кнопка догрузки.
+   Здесь же localize(): догрузка порции меняет сетку, не проходя через
+   роутер, и новые карточки обязаны получить тот же язык, что и первые. */
 function updateCatTail(grid) {
   const total = (state.catItems || []).length;
-  $("#cat-count").textContent = CatalogPage.statusLabel(state.catShown, total);
+  $("#cat-count").textContent = t(CatalogPage.statusLabel(state.catShown, total));
   bindCards(grid);
   setCatMore(CatalogPage.remaining(state.catShown, total));
+  localize(grid);
 }
 
 /* Хвост под сеткой: кнопка «Показать ещё» + невидимый «часовой», по
@@ -622,7 +799,7 @@ function setCatMore(left) {
   const step = Math.min(left, CatalogPage.PAGE);
   box.innerHTML = `
     <button class="btn btn-outline" id="cat-more-btn">
-      Показать ещё ${step} из ${left}
+      ${esc(t("Показать ещё {step} из {left}", { step, left }))}
     </button>
     <div id="cat-sentinel" aria-hidden="true"></div>`;
   $("#cat-more-btn").addEventListener("click", showMoreCards);
@@ -672,7 +849,7 @@ function renderQuiz() {
         <div class="quiz-emoji">${q.emoji}</div>
         <h2>${q.title}</h2>
         <div class="options">${options}</div>
-        ${isMulti ? `<div class="max-note">Выберите до ${q.max} — можно менять выбор</div>` : ""}
+        ${isMulti ? `<div class="max-note">${esc(t("Выберите до {max} — можно менять выбор", { max: q.max }))}</div>` : ""}
         <div class="quiz-nav">
           <button class="btn btn-outline btn-sm" id="q-back" ${idx === 0 ? "disabled" : ""}>← Назад</button>
           <span class="quiz-step">${idx + 1} / ${qs.length}</span>
@@ -685,7 +862,7 @@ function renderQuiz() {
     if (isMulti) {
       const cur = new Set(ans || []);
       if (cur.has(id)) cur.delete(id);
-      else if (cur.size >= q.max) { toast(`Максимум ${q.max} варианта`); return; }
+      else if (cur.size >= q.max) { toast(t("Максимум {max} варианта", { max: q.max })); return; }
       else cur.add(id);
       state.q.answers[q.id] = [...cur];
     } else {
@@ -698,22 +875,26 @@ function renderQuiz() {
   const back = $("#q-back"), next = $("#q-next");
   if (back) back.addEventListener("click", () => { state.q.step--; renderQuiz(); });
   if (next) next.addEventListener("click", submitQuiz);
+  localize();
 }
 
 async function submitQuiz() {
   const btn = $("#q-next");
-  if (btn) { btn.disabled = true; btn.textContent = "Считаем…"; }
+  if (btn) { btn.disabled = true; btn.textContent = t("Считаем…"); }
   try {
     state.quizResult = await api("/api/quiz/evaluate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(state.q.answers),
     });
+    // Выдачу квиза сервер собирает из своих же записей — перевод накладываем
+    // и на неё, иначе карточки рекомендаций остались бы русскими.
+    applyLabelsToData();
     location.hash = "#/quiz";
     renderQuiz();
   } catch (e) {
-    toast(apiErrorText(e, "Не удалось посчитать рекомендации"));
-    if (btn) { btn.disabled = false; btn.textContent = "Далее →"; }
+    toast(apiErrorText(e, t("Не удалось посчитать рекомендации")));
+    if (btn) { btn.disabled = false; btn.textContent = t("Далее →"); }
     // Исчерпанный лимит квиза: кнопка возвращается в строй вместе
     // с окном, а не сразу — иначе следующий клик снова получит 429.
     coolDown(
@@ -737,7 +918,7 @@ function dayCard(day) {
   return `
     <div class="day-card">
       <div class="day-head">
-        <span class="day-num">День ${day.day}</span>
+        <span class="day-num">${esc(t("День {day}", { day: day.day }))}</span>
         <span class="day-area">${day.area_label}</span>
         ${tags ? `<span class="day-tags muted">${tags}</span>` : ""}
       </div>
@@ -745,7 +926,7 @@ function dayCard(day) {
         <div class="stop" data-id="${s.id}">
           <span class="slot">${SLOT_META[s.slot]?.icon || "·"} ${SLOT_META[s.slot]?.label || s.slot}</span>
           <span class="stop-name"><a href="#/place/${s.id}">${s.type_meta.emoji} ${esc(s.name)}</a></span>
-          <span class="muted stop-h">⏱ ${s.duration_h} ч</span>
+          <span class="muted stop-h">${esc(t("⏱ {h} ч", { h: s.duration_h }))}</span>
         </div>`).join("")}
     </div>`;
 }
@@ -764,6 +945,7 @@ async function autoEvaluatePlan(plan) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(plan),
     });
+    applyLabelsToData();
     renderQuizResult();
   } catch (e) {
     state.planAutoDone = false;
@@ -780,19 +962,26 @@ function copyPlanLink() {
 
 function planAsText() {
   const r = state.quizResult;
-  const lines = [`🌊 Крым.Гид — ${r.profile.emoji} ${r.profile.title}`, ""];
+  const lines = [t("🌊 Крым.Гид — {emoji} {profile}", {
+    emoji: r.profile.emoji, profile: t(r.profile.title),
+  }), ""];
   for (const d of r.itinerary.days) {
-    lines.push(`День ${d.day} · ${d.area_label}`);
+    lines.push(t("День {day} · {area}", { day: d.day, area: t(d.area_label) }));
     for (const s of d.stops) {
-      lines.push(`  ${SLOT_META[s.slot].icon} ${SLOT_META[s.slot].label}: ${s.name} (⏱ ${s.duration_h} ч)`);
+      lines.push(t("  {icon} {slot}: {name} ({time})", {
+        icon: SLOT_META[s.slot].icon,
+        slot: t(SLOT_META[s.slot].label),
+        name: s.name,
+        time: t("⏱ {h} ч", { h: s.duration_h }),
+      }));
     }
     lines.push("");
   }
   if (r.itinerary.reserve.length) {
-    lines.push("Запас на дождь или «впритык»:");
+    lines.push(t("Запас на дождь или «впритык»:"));
     r.itinerary.reserve.slice(0, 8).forEach(s => lines.push(`  • ${s.name}`));
   }
-  lines.push("", "Собрано в Крым.Гид: " + location.origin + location.pathname);
+  lines.push("", t("Собрано в Крым.Гид: {url}", { url: location.origin + location.pathname }));
   return lines.join("\n");
 }
 
@@ -828,8 +1017,8 @@ function renderQuizResult() {
       </div>
       <div class="hint-box">${r.transport_hint}</div>
       <div class="section-head">
-        <h2 style="font-size:20px">Вам подобрали ${r.count} мест</h2>
-        <span class="sub">на ${r.days_hint} день(и), из ${r.all_matched} подходящих</span>
+        <h2 style="font-size:20px">${esc(t("Вам подобрали {n}", { n: nform(r.count, ["место", "места", "мест"], "place", "places") }))}</h2>
+        <span class="sub">${esc(t("на {days} дн., из {all} подходящих", { days: r.days_hint, all: r.all_matched }))}</span>
       </div>
       ${r.recommendations.map(a => `
         <div class="rec-row" data-id="${a.id}">
@@ -839,9 +1028,9 @@ function renderQuizResult() {
             data-img-fallback="soft" />
           <div class="rec-body">
             <h3><a href="#/place/${a.id}">${a.type_meta.emoji} ${esc(a.name)}</a></h3>
-            <div class="rec-region">📍 ${esc(a.region)} · ⏱ ${a.duration_h} ч · <span class="star" aria-hidden="true">★</span> ${a.rating.toFixed(1)}</div>
+            <div class="rec-region">📍 ${esc(a.region)} · ${esc(t("⏱ {h} ч", { h: a.duration_h }))} · <span class="star" aria-hidden="true">★</span> ${a.rating.toFixed(1)}</div>
             <div class="rec-reasons">
-              ${a.reasons.map(x => `<span class="chip">${esc(x)}</span>`).join("")}
+              ${a.reasons.map(x => `<span class="chip">${esc(tReason(x))}</span>`).join("")}
             </div>
           </div>
           <span class="rec-score" title="балл совпадения">${a.score}</span>
@@ -892,6 +1081,7 @@ function renderQuizResult() {
   $("#plan-copy").addEventListener("click", copyPlanLink);
   $("#plan-text").addEventListener("click", copyPlanText);
   $("#plan-print").addEventListener("click", () => { document.body.classList.add("print-plan"); window.print(); });
+  localize();
 }
 
 /* ---------------- news ---------------- */
@@ -943,15 +1133,16 @@ async function renderNews(refresh = false) {
     // сколько ждать, — отдыхаем ровно столько: второй отказ ничего не даёт.
     state.newsLoading = false;
     const btn = $("#news-refresh");
-    if (btn) { btn.disabled = false; btn.textContent = "↻ Обновить"; }
+    if (btn) { btn.disabled = false; btn.textContent = t("↻ Обновить"); }
     const budget = freshBudget("news");
     coolDown(
       btn,
       RateLimit.cooldownSeconds(budget, e.retryAfter),
-      "↻ Обновить"
+      t("↻ Обновить")
     );
-    const text = apiErrorText(e, `Не удалось получить новости: ${e.message}`);
+    const text = apiErrorText(e, t("Не удалось получить новости: {msg}", { msg: e.message }));
     $("#news-list").innerHTML = `<div class="empty"><div class="big">⚠️</div>${esc(text)}</div>`;
+    localize();
     return;
   }
   // Остаток бюджета — рядом с кнопкой: сервер его уже сказал, а гасить
@@ -962,7 +1153,7 @@ async function renderNews(refresh = false) {
   coolDown(
     $("#news-refresh"),
     RateLimit.cooldownSeconds(newsBudget, newsBudget && newsBudget.retryAfter),
-    "↻ Обновить"
+    t("↻ Обновить")
   );
   renderNewsBody();
 }
@@ -973,12 +1164,13 @@ function renderNewsBody() {
   if (n.online) {
     badge.className = "badge badge-ok badge-dot";
     badge.textContent = "live";
-    const failed = n.failed_sources.length ? ` · упало: ${n.failed_sources.length}` : "";
-    $("#news-upd").textContent = `обновлено ${fmtTime(n.updated_at)}${failed}`;
+    const failed = n.failed_sources.length
+      ? t(" · упало: {n}", { n: n.failed_sources.length }) : "";
+    $("#news-upd").textContent = t("обновлено {time}{failed}", { time: fmtTime(n.updated_at), failed });
   } else {
     badge.className = "badge badge-warn badge-dot";
-    badge.textContent = "офлайн";
-    $("#news-upd").textContent = `кэш от ${fmtTime(n.updated_at)}`;
+    badge.textContent = t("офлайн");
+    $("#news-upd").textContent = t("кэш от {time}", { time: fmtTime(n.updated_at) });
     $("#news-offline").innerHTML = `
       <div class="hint-box" style="margin-bottom:16px">
         📡 RSS-ленты сейчас недоступны из вашей сети — показываем кэшированные материалы.
@@ -1000,7 +1192,8 @@ function renderNewsBody() {
     (!q || x.title.toLowerCase().includes(q) || (x.summary || "").toLowerCase().includes(q)));
   $("#news-list").innerHTML = items.length
     ? items.map(newsItemHTML).join("")
-    : `<div class="empty"><div class="big">📭</div>${q ? "Ничего не нашлось по запросу." : "По этой теме пока пусто."}</div>`;
+    : `<div class="empty"><div class="big">📭</div>${q ? t("Ничего не нашлось по запросу.") : t("По этой теме пока пусто.")}</div>`;
+  localize();
 }
 
 /* ---------------- modal ---------------- */
@@ -1055,7 +1248,11 @@ function openModal(id) {
   const a = state.attractions.find(x => x.id === id);
   if (!a) return;
   const meta = state.meta.types[a.type] || { emoji: "📍", img: "cat_nature.jpg", label: a.type };
-  const mapUrl = "https://yandex.ru/maps/?text=" + encodeURIComponent(`Крым, ${a.name}`);
+  // Запрос в Яндекс.Карты остаётся русским: по-русски он находит место
+  // точнее, даже когда экран уже английской речи.
+  const query = typeof I18n !== "undefined" && I18n.isEnglish() && a.name_ru
+    ? a.name_ru : a.name;
+  const mapUrl = "https://yandex.ru/maps/?text=" + encodeURIComponent(`Крым, ${query}`);
   _modalLastFocus = document.activeElement;
   $("#modal-root").innerHTML = `
     <div class="overlay" id="overlay">
@@ -1072,7 +1269,7 @@ function openModal(id) {
           <div class="facts">
             <div class="fact"><span class="k">Сезон</span>${a.season.map(s => ({ summer: "☀️ лето", spring: "🌸 весна", autumn: "🍂 осень", winter: "❄️ зима" }[s] || s)).join(", ")}</div>
             <div class="fact"><span class="k">Бюджет</span>${budgetIcons(a.budget)} · ${esc(a.price_hint)}</div>
-            <div class="fact"><span class="k">Длительность</span>≈ ${a.duration_h} ч</div>
+            <div class="fact"><span class="k">Длительность</span>${esc(t("≈ {h} ч", { h: a.duration_h }))}</div>
             <div class="fact"><span class="k">Рейтинг</span><span class="star" aria-hidden="true">★</span> ${a.rating.toFixed(1)} / 5</div>
             ${a.hours ? `<div class="fact fact-wide"><span class="k">Часы работы</span>🕘 ${esc(a.hours)}
               ${OpenNow.label(a) ? `<div class="open-now">${esc(OpenNow.label(a))}</div>` : ""}</div>` : ""}
@@ -1114,6 +1311,8 @@ function openModal(id) {
   document.body.style.overflow = "hidden";
   document.addEventListener("keydown", trapModalTab, true);
   $("#m-close").focus();  // фокус входит в диалог
+  // Модалка живёт в #modal-root, то есть вне `#view`: её localize() свой.
+  localize($("#modal-root"));
 }
 
 /* ---------------- map ---------------- */
@@ -1236,7 +1435,7 @@ function switchMapLayer(layer) {
     if (wrap) wrap.classList.remove("map-interactive");
     const lm = $("#lm-interactive");
     if (lm) lm.setAttribute("aria-hidden", "true");
-    if (note) note.textContent = "работает без сети";
+    if (note) note.textContent = t("работает без сети");
     $$(".map-switch button[data-layer]").forEach(b => {
       const on = b.dataset.layer === "svg";
       b.classList.toggle("active", on);
@@ -1247,7 +1446,7 @@ function switchMapLayer(layer) {
   }
   /* leaflet: пытаемся поднять. */
   if (typeof LeafletMap === "undefined") {
-    toast("Интерактивная карта недоступна");
+    toast(t("Интерактивная карта недоступна"));
     return;
   }
   state.mapLayer = "leaflet";
@@ -1259,12 +1458,12 @@ function switchMapLayer(layer) {
     b.classList.toggle("active", on);
     b.setAttribute("aria-pressed", String(on));
   });
-  if (note) note.textContent = "загружаем карту…";
+  if (note) note.textContent = t("загружаем карту…");
   drawMap()
-    .then(() => { if (note) note.textContent = "интерактивная карта · тайлы OpenStreetMap"; })
+    .then(() => { if (note) note.textContent = t("интерактивная карта · тайлы OpenStreetMap"); })
     .catch(err => {
       console.warn("Leaflet failed:", err);
-      toast("Не удалось загрузить интерактивную карту — остаёмся на схеме");
+      toast(t("Не удалось загрузить интерактивную карту — остаёмся на схеме"));
       switchMapLayer("svg");
     });
 }
@@ -1286,7 +1485,7 @@ function drawMap() {
       const color = TYPE_COLORS[a.type] || "#64748b";
       const fav = state.favs.has(a.id) ? ' class="fav-ring"' : "";
       return `<g class="marker" data-id="${a.id}" tabindex="0" role="button"
-          aria-label="${esc(a.name)} — открыть карточку"
+          aria-label="${esc(t("{name} — открыть карточку", { name: a.name }))}"
           transform="translate(${MAP.px(a.lng).toFixed(1)},${MAP.py(a.lat).toFixed(1)})">
         <title>${esc(a.name)} — ${esc(a.region)}</title>
         <circle${fav} r="14" fill="none" stroke="#e0475b" stroke-width="2" opacity="${state.favs.has(a.id) ? 1 : 0}"/>
@@ -1336,6 +1535,7 @@ function drawMap() {
     });
   }
 
+  localize($("#crimea-map"));   // подписи городов и морей рисует SVG
   // легенда: только типы, представленные в текущей выборке
   const types = [...new Set(items.map(a => a.type))].sort();
   const legendEl = $("#map-legend");
@@ -1344,6 +1544,7 @@ function drawMap() {
       const meta = state.meta.types[t] || { emoji: "📍", label: t };
       return `<span class="legend-item"><i style="background:${TYPE_COLORS[t] || "#64748b"}"></i>${meta.emoji} ${meta.label}</span>`;
     }).join("") + `<span class="legend-item"><i style="background:transparent;border:2px solid #e0475b;border-radius:50%"></i>❤ избранное</span>`;
+    localize(legendEl);
   }
 
   /* --- Интерактивный слой: поднимаем только когда включён --- */
@@ -1370,7 +1571,8 @@ const ROUTE_TITLES = {
 
 function announce(text) {
   const el = $("#route-status");
-  if (el) el.textContent = text;
+  // aria-live-текст не проходит через обходчик — переводим явно.
+  if (el) el.textContent = t(text);
 }
 
 function hashParts() {
@@ -1398,6 +1600,9 @@ function route() {
     openModal(decodeURIComponent(path.slice(6)));
     state._lastRoute = "catalog";
     announce(`Карточка места открыта поверх каталога`);
+    // Ранний выход: общего localize() в конце роутера здесь нет, а шапка
+    // каталога (чипы тем, счётчик, кнопка догрузки) живёт в `#view`.
+    localize();
     return;
   }
   if (path === "catalog") {
@@ -1424,7 +1629,8 @@ function route() {
   }
   else renderHome();
   state._lastRoute = navPath;
-  announce(ROUTE_TITLES[navPath] || "Крым.Гид");
+  announce(ROUTE_TITLES[navPath] ? t(ROUTE_TITLES[navPath]) : t("Крым.Гид"));
+  localize();
   window.scrollTo({ top: 0 });
 }
 
@@ -1441,6 +1647,10 @@ window.addEventListener("keydown", e => {
 });
 window.addEventListener("afterprint", () => document.body.classList.remove("print-plan"));
 
+$("#lang-toggle").addEventListener("click", async () => {
+  const applied = await switchLang(state.lang === "en" ? "ru" : "en");
+  if (applied === state.lang) route();   // перерисовываем: язык поменялся
+});
 $("#nav-toggle").addEventListener("click", () => {
   const nav = $(".nav");
   nav.classList.toggle("open");
@@ -1470,9 +1680,13 @@ $("#skip-link").addEventListener("click", e => {
     state.attractions = attr.items;
     state.quiz = quiz;
   } catch (e) {
-    view.innerHTML = `<div class="empty"><div class="big">⚠️</div>Не удалось загрузить данные приложения: ${e.message}</div>`;
+    view.innerHTML = `<div class="empty"><div class="big">⚠️</div>${esc(t("Не удалось загрузить данные приложения: {msg}", { msg: e.message }))}</div>`;
     return;
   }
+  // Речь выбираем до первого рендера: иначе пользователь увидит, как
+  // русский экран на глазах превращается в английский.
+  await initLang();
+  applyLabelsToData();
   try { await loadNews(); } catch (e) { /* badge останется в дефолте */ }
   api("/api/weather").then(d => { state.weather = d; route(); }).catch(() => {});
   api("/api/sea").then(d => { state.sea = d; route(); }).catch(() => {});

@@ -1,6 +1,6 @@
 /* Крым.Гид — service worker: офлайн-оболочка приложения.
    Статика — cache-first, API — network-first с откатом в кэш. */
-const CACHE = "crimea-gid-v1.7.0";
+const CACHE = "crimea-gid-v1.8.0";
 const SHELL = [
   "/",
   "/static/style.css",
@@ -14,6 +14,11 @@ const SHELL = [
   "/static/leaflet-map.js",
   "/static/vendor/leaflet.css",
   "/static/vendor/leaflet.js",
+  // Словарь локализации обязан успеть встать до app.js: он определяет
+  // `I18n`, из которого фронт берёт `t()`. Английский пакет
+  // `/static/i18n/en.json` сюда не входит намеренно: он нужен только
+  // англичанину, а офлайн-первый-визит честно остаётся на русском.
+  "/static/i18n.js",
   "/static/app.js",
   "/static/manifest.webmanifest",
   "/static/img/hero.jpg",

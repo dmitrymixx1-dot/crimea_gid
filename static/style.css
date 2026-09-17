@@ -87,6 +87,10 @@ button { font: inherit; cursor: pointer; }
 .badge-ok { background: #e2f5ec; color: var(--ok); }
 .badge-warn { background: var(--sun-soft); color: #a36a08; }
 .badge-dot::before { content: "●"; font-size: 9px; }
+/* Переключатель речи выглядит значком (он и есть значок в шапке), но он
+   кликабельный — поэтому состояние «включено» должно быть видно. */
+#lang-toggle:hover { background: #d7e3ea; color: var(--sea-dark); }
+#lang-toggle[aria-pressed="true"] { background: var(--sea); color: #fff; }
 
 /* ---------- hero ---------- */
 .hero {
