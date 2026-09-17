@@ -49,12 +49,17 @@ SITE_ORIGIN = os.environ.get("SITE_ORIGIN", "").rstrip("/")
 # frame-ancestors ослабляется через env, когда приложение встраивают
 # в iframe (превью, витрины): CSP_FRAME_ANCESTORS="*".
 CSP_FRAME_ANCESTORS = os.environ.get("CSP_FRAME_ANCESTORS", "'self'")
+# Внешние источники для опциональной интерактивной карты (Leaflet + OSM).
+# По умолчанию пользователь видит офлайн SVG-схему; эти хосты нужны только
+# если он явно включил слой «🛰 Спутник/карта».
+CSP_EXTERNAL_TILES = "https://tile.openstreetmap.org"
+
 CSP = (
     "default-src 'self'; "
     "script-src 'self'; "
     "style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data:; "
-    "connect-src 'self'; "
+    f"img-src 'self' data: {CSP_EXTERNAL_TILES}; "
+    f"connect-src 'self' {CSP_EXTERNAL_TILES}; "
     "font-src 'self' data:; "
     "object-src 'none'; "
     "base-uri 'self'; "
@@ -62,4 +67,4 @@ CSP = (
     f"frame-ancestors {CSP_FRAME_ANCESTORS}"
 )
 
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"

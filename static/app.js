@@ -45,6 +45,7 @@ const state = {
   weather: null,
   sea: null,
   mapShowPlan: false,
+  mapLayer: "svg",   // "svg" — родная схема (офлайн), "leaflet" — интерактивная (по сети)
   // Порционный показ каталога: текущая подборка и сколько карточек
   // из неё уже нарисовано (см. static/catalog-page.js).
   catItems: [],
@@ -1081,6 +1082,7 @@ function renderMap() {
   const typeBtns = Object.keys(state.meta.tags).map(t => `
     <button class="chip-btn ${state.f.tag === t ? "active" : ""}" data-tag="${t}">${tagLabel(t)}</button>`).join("");
   const hasPlan = !!state.quizResult;
+  const leafletPossible = typeof LeafletMap !== "undefined";
   view.innerHTML = `
     <div class="section">
       <div class="section-head">
@@ -1089,14 +1091,27 @@ function renderMap() {
       </div>
       <div class="map-toolbar">
         <div class="filter-row" id="map-tags">${typeBtns}</div>
-        <button class="btn btn-outline btn-sm" id="map-plan" ${hasPlan ? "" : "disabled"}
-          title="${hasPlan ? "Показать маршрут плана по дням" : "Сначала пройдите квиз"}">
-          🗓 Мой план
-        </button>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div class="map-switch" role="group" aria-label="Слой карты">
+            <button data-layer="svg" class="${state.mapLayer === "svg" ? "active" : ""}"
+              aria-pressed="${state.mapLayer === "svg"}">📐 Схема</button>
+            <button data-layer="leaflet" class="${state.mapLayer === "leaflet" ? "active" : ""}"
+              aria-pressed="${state.mapLayer === "leaflet"}"
+              ${leafletPossible ? "" : "disabled"}>🛰 Спутник/карта</button>
+          </div>
+          <span class="map-note" id="map-note">${
+            state.mapLayer === "leaflet" ? "интерактивная карта · тайлы OpenStreetMap" : "работает без сети"
+          }</span>
+          <button class="btn btn-outline btn-sm" id="map-plan" ${hasPlan ? "" : "disabled"}
+            title="${hasPlan ? "Показать маршрут плана по дням" : "Сначала пройдите квиз"}">
+            🗓 Мой план
+          </button>
+        </div>
       </div>
-      <div class="map-wrap">
+      <div class="map-wrap ${state.mapLayer === "leaflet" ? "map-interactive" : ""}" id="map-wrap">
         <svg id="crimea-map" viewBox="0 0 ${MAP.W} ${MAP.H}" role="img"
           aria-label="Схема Крыма с точками"></svg>
+        <div id="lm-interactive" aria-hidden="${state.mapLayer !== "leaflet"}"></div>
       </div>
       <div class="map-legend" id="map-legend"></div>
     </div>`;
@@ -1108,77 +1123,150 @@ function renderMap() {
     state.mapShowPlan = !state.mapShowPlan;
     drawMap();
   });
+  $$(".map-switch button[data-layer]").forEach(b => b.addEventListener("click", () => {
+    if (b.disabled) return;
+    const next = b.dataset.layer;
+    if (next === state.mapLayer) return;
+    switchMapLayer(next);
+  }));
   drawMap();
+}
+
+/* Переключение слоя карты: SVG <-> Leaflet. Leaflet инициализируется
+   лениво — при первом включении пользователем. При ошибке загрузки
+   (сеть не даёт тайлы) — возвращаемся на SVG и показываем тост. */
+function switchMapLayer(layer) {
+  const wrap = $("#map-wrap");
+  const note = $("#map-note");
+  if (layer === "svg") {
+    state.mapLayer = "svg";
+    if (wrap) wrap.classList.remove("map-interactive");
+    const lm = $("#lm-interactive");
+    if (lm) lm.setAttribute("aria-hidden", "true");
+    if (note) note.textContent = "работает без сети";
+    $$(".map-switch button[data-layer]").forEach(b => {
+      const on = b.dataset.layer === "svg";
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    drawMap();
+    return;
+  }
+  /* leaflet: пытаемся поднять. */
+  if (typeof LeafletMap === "undefined") {
+    toast("Интерактивная карта недоступна");
+    return;
+  }
+  state.mapLayer = "leaflet";
+  if (wrap) wrap.classList.add("map-interactive");
+  const lm = $("#lm-interactive");
+  if (lm) lm.setAttribute("aria-hidden", "false");
+  $$(".map-switch button[data-layer]").forEach(b => {
+    const on = b.dataset.layer === "leaflet";
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-pressed", String(on));
+  });
+  if (note) note.textContent = "загружаем карту…";
+  drawMap()
+    .then(() => { if (note) note.textContent = "интерактивная карта · тайлы OpenStreetMap"; })
+    .catch(err => {
+      console.warn("Leaflet failed:", err);
+      toast("Не удалось загрузить интерактивную карту — остаёмся на схеме");
+      switchMapLayer("svg");
+    });
 }
 
 function drawMap() {
   const svg = $("#crimea-map");
-  if (!svg) return;
+  const lm = $("#lm-interactive");
   const pts = arr => arr.map(([lng, lat]) =>
     `${MAP.px(lng).toFixed(1)},${MAP.py(lat).toFixed(1)}`).join(" ");
   const items = state.attractions.filter(
     a => !state.f.tag || a.tags.includes(state.f.tag));
 
-  const markers = items.map(a => {
-    const meta = state.meta.types[a.type] || { emoji: "📍" };
-    const color = TYPE_COLORS[a.type] || "#64748b";
-    const fav = state.favs.has(a.id) ? ' class="fav-ring"' : "";
-    return `<g class="marker" data-id="${a.id}" tabindex="0" role="button"
-        aria-label="${esc(a.name)} — открыть карточку"
-        transform="translate(${MAP.px(a.lng).toFixed(1)},${MAP.py(a.lat).toFixed(1)})">
-      <title>${esc(a.name)} — ${esc(a.region)}</title>
-      <circle${fav} r="14" fill="none" stroke="#e0475b" stroke-width="2" opacity="${state.favs.has(a.id) ? 1 : 0}"/>
-      <circle r="11" fill="${color}" stroke="#fff" stroke-width="2"/>
-      <text y="4.5" text-anchor="middle" font-size="11" pointer-events="none">${meta.emoji}</text>
-    </g>`;
-  }).join("");
+  /* --- SVG-схема (всегда рисуем, даже если сейчас активен Leaflet —
+     она просто скрыта через display:none, и при неудачной загрузке
+     интерактивного слоя пользователь сразу видит знакомый вид). --- */
+  if (svg) {
+    const markers = items.map(a => {
+      const meta = state.meta.types[a.type] || { emoji: "📍" };
+      const color = TYPE_COLORS[a.type] || "#64748b";
+      const fav = state.favs.has(a.id) ? ' class="fav-ring"' : "";
+      return `<g class="marker" data-id="${a.id}" tabindex="0" role="button"
+          aria-label="${esc(a.name)} — открыть карточку"
+          transform="translate(${MAP.px(a.lng).toFixed(1)},${MAP.py(a.lat).toFixed(1)})">
+        <title>${esc(a.name)} — ${esc(a.region)}</title>
+        <circle${fav} r="14" fill="none" stroke="#e0475b" stroke-width="2" opacity="${state.favs.has(a.id) ? 1 : 0}"/>
+        <circle r="11" fill="${color}" stroke="#fff" stroke-width="2"/>
+        <text y="4.5" text-anchor="middle" font-size="11" pointer-events="none">${meta.emoji}</text>
+      </g>`;
+    }).join("");
 
-  let planLayer = "";
-  if (state.mapShowPlan && state.quizResult) {
-    const stops = state.quizResult.itinerary.days.flatMap(d => d.stops);
-    planLayer = `
-      <polyline points="${stops.map(s =>
-        `${MAP.px(s.lng).toFixed(1)},${MAP.py(s.lat).toFixed(1)}`).join(" ")}"
-        fill="none" stroke="#f5a524" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.9"/>
-      ${stops.map((s, i) => `<g transform="translate(${MAP.px(s.lng).toFixed(1)},${MAP.py(s.lat).toFixed(1)})" pointer-events="none">
-        <circle r="8" fill="#f5a524" stroke="#fff" stroke-width="2"/>
-        <text y="3.5" text-anchor="middle" font-size="9" font-weight="700" fill="#3a2a05">${i + 1}</text>
-      </g>`).join("")}`;
+    let planLayer = "";
+    if (state.mapShowPlan && state.quizResult) {
+      const stops = state.quizResult.itinerary.days.flatMap(d => d.stops);
+      planLayer = `
+        <polyline points="${stops.map(s =>
+          `${MAP.px(s.lng).toFixed(1)},${MAP.py(s.lat).toFixed(1)}`).join(" ")}"
+          fill="none" stroke="#f5a524" stroke-width="2.5" stroke-dasharray="7 5" opacity="0.9"/>
+        ${stops.map((s, i) => `<g transform="translate(${MAP.px(s.lng).toFixed(1)},${MAP.py(s.lat).toFixed(1)})" pointer-events="none">
+          <circle r="8" fill="#f5a524" stroke="#fff" stroke-width="2"/>
+          <text y="3.5" text-anchor="middle" font-size="9" font-weight="700" fill="#3a2a05">${i + 1}</text>
+        </g>`).join("")}`;
+    }
+
+    svg.innerHTML = `
+      <defs>
+        <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#c3e6ef"/>
+          <stop offset="1" stop-color="#a8d8e8"/>
+        </linearGradient>
+      </defs>
+      <rect x="0" y="0" width="${MAP.W}" height="${MAP.H}" fill="url(#sea)" rx="18"/>
+      <polygon points="${pts(MAP.coast)}" fill="#f5eddb" stroke="#cbb98e" stroke-width="2.5" stroke-linejoin="round"/>
+      <polygon points="${pts(MAP.sivash)}" fill="#b9dde9" stroke="#8fc3d4" stroke-width="1.5"/>
+      <text class="sea-label" x="430" y="${MAP.H - 22}">Чёрное море</text>
+      <text class="sea-label" x="790" y="118">Азовское море</text>
+      <text class="sea-label small" x="462" y="98">Сиваш</text>
+      <text class="sea-label small" x="925" y="252">Керченский пролив</text>
+      <text class="sea-label small" x="352" y="20">материк</text>
+      ${MAP.cities.map(([n, lng, lat]) =>
+        `<text class="city-label" x="${MAP.px(lng).toFixed(1)}" y="${MAP.py(lat).toFixed(1)}">${n}</text>`).join("")}
+      ${markers}
+      <g id="plan-layer">${planLayer}</g>`;
+
+    $$(".marker", svg).forEach(g => {
+      g.addEventListener("click", () => openModal(g.dataset.id));
+      g.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openModal(g.dataset.id); }
+      });
+    });
   }
-
-  svg.innerHTML = `
-    <defs>
-      <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#c3e6ef"/>
-        <stop offset="1" stop-color="#a8d8e8"/>
-      </linearGradient>
-    </defs>
-    <rect x="0" y="0" width="${MAP.W}" height="${MAP.H}" fill="url(#sea)" rx="18"/>
-    <polygon points="${pts(MAP.coast)}" fill="#f5eddb" stroke="#cbb98e" stroke-width="2.5" stroke-linejoin="round"/>
-    <polygon points="${pts(MAP.sivash)}" fill="#b9dde9" stroke="#8fc3d4" stroke-width="1.5"/>
-    <text class="sea-label" x="430" y="${MAP.H - 22}">Чёрное море</text>
-    <text class="sea-label" x="790" y="118">Азовское море</text>
-    <text class="sea-label small" x="462" y="98">Сиваш</text>
-    <text class="sea-label small" x="925" y="252">Керченский пролив</text>
-    <text class="sea-label small" x="352" y="20">материк</text>
-    ${MAP.cities.map(([n, lng, lat]) =>
-      `<text class="city-label" x="${MAP.px(lng).toFixed(1)}" y="${MAP.py(lat).toFixed(1)}">${n}</text>`).join("")}
-    ${markers}
-    <g id="plan-layer">${planLayer}</g>`;
 
   // легенда: только типы, представленные в текущей выборке
   const types = [...new Set(items.map(a => a.type))].sort();
-  $("#map-legend").innerHTML = types.map(t => {
-    const meta = state.meta.types[t] || { emoji: "📍", label: t };
-    return `<span class="legend-item"><i style="background:${TYPE_COLORS[t] || "#64748b"}"></i>${meta.emoji} ${meta.label}</span>`;
-  }).join("") + `<span class="legend-item"><i style="background:transparent;border:2px solid #e0475b;border-radius:50%"></i>❤ избранное</span>`;
+  const legendEl = $("#map-legend");
+  if (legendEl) {
+    legendEl.innerHTML = types.map(t => {
+      const meta = state.meta.types[t] || { emoji: "📍", label: t };
+      return `<span class="legend-item"><i style="background:${TYPE_COLORS[t] || "#64748b"}"></i>${meta.emoji} ${meta.label}</span>`;
+    }).join("") + `<span class="legend-item"><i style="background:transparent;border:2px solid #e0475b;border-radius:50%"></i>❤ избранное</span>`;
+  }
 
-  $$(".marker", svg).forEach(g => {
-    g.addEventListener("click", () => openModal(g.dataset.id));
-    g.addEventListener("keydown", e => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openModal(g.dataset.id); }
+  /* --- Интерактивный слой: поднимаем только когда включён --- */
+  if (state.mapLayer === "leaflet" && lm && typeof LeafletMap !== "undefined") {
+    const planStops = state.mapShowPlan && state.quizResult
+      ? state.quizResult.itinerary.days.flatMap(d => d.stops)
+      : [];
+    return LeafletMap.createOrUpdate(lm, items, openModal, {
+      showPlan: state.mapShowPlan,
+      planStops: planStops,
+      typesMeta: state.meta.types,
+    }).catch(err => {
+      throw err;
     });
-  });
+  }
+  return Promise.resolve();
 }
 
 /* ---------------- router / init ---------------- */
