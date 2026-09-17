@@ -16,11 +16,11 @@
 (function (root, factory) {
   if (typeof module === "object" && module.exports) {
     /* Node-окружение: тесты. Leaflet там нет, отдаём хелперы. */
-    module.exports = factory(null);
+    module.exports = factory(null, require("./map-layout.js"));
   } else {
-    root.LeafletMap = factory(root.L);
+    root.LeafletMap = factory(root.L, root.MapLayout);
   }
-})(typeof self !== "undefined" ? self : this, function (L) {
+})(typeof self !== "undefined" ? self : this, function (L, MapLayout) {
   "use strict";
 
   /* Центр и дефолтный зум Крыма. */
@@ -95,6 +95,8 @@
     options = options || {};
     return loadLeaflet().then(function (Leaflet) {
       L = Leaflet;
+      // Ленивый загрузчик мог завершиться уже после ухода с экрана.
+      if (!container.isConnected) return null;
       if (!container._lm) {
         /* Вырубаем атрибуцию по умолчанию частично — оставляем обязательную
          * строчку OpenStreetMap, но убираем кричащий баннер Leaflet,
@@ -105,6 +107,9 @@
           minZoom: ZOOM_MIN,
           maxZoom: ZOOM_MAX,
           zoomControl: true,
+          // Фильтр/роут может удалить контейнер во время zoom-перехода.
+          // Без анимации Leaflet не оставляет таймер к уже удалённой карте.
+          zoomAnimation: false,
           attributionControl: true,
         });
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -113,7 +118,7 @@
         }).addTo(map);
         container._lm = {
           map: map,
-          markers: L.layerGroup().addTo(map),
+          markers: L.featureGroup().addTo(map),
           planLayer: L.layerGroup().addTo(map),
         };
         /* L.map ломает размеры, если контейнер был скрыт: invalidateSize
@@ -122,44 +127,76 @@
       }
       var state = container._lm;
 
-      /* --- маркеры --- */
+      // Убираем прежний обработчик при фильтрации/переключении плана.
+      if (state.reposition) state.map.off("zoomend", state.reposition);
+      state.map.invalidateSize();
       state.markers.clearLayers();
-      items.forEach(function (a) {
-        var meta = (options.typesMeta && options.typesMeta[a.type]) || { emoji: "📍" };
-        var marker = L.marker([a.lat, a.lng], { icon: buildIcon(a.type, meta.emoji), title: a.name })
-          .on("click", function () { if (onSelect) onSelect(a.id); })
-          .bindPopup("<b>" + a.name + "</b><br><small>" + (a.region || "") + "</small>");
-        state.markers.addLayer(marker);
-      });
-
-      /* --- план маршрута --- */
       state.planLayer.clearLayers();
-      if (options.showPlan && Array.isArray(options.planStops) && options.planStops.length > 1) {
-        var latlngs = options.planStops.map(function (s) { return [s.lat, s.lng]; });
-        L.polyline(latlngs, { color: "#f5a524", weight: 3, opacity: 0.85, dashArray: "7 5" })
-          .addTo(state.planLayer);
-        options.planStops.forEach(function (s, i) {
-          L.marker([s.lat, s.lng], {
-            icon: L.divIcon({
-              className: "lm-plan-num",
-              html: '<div class="lm-num-pin">' + (i + 1) + "</div>",
-              iconSize: [24, 28],
-              iconAnchor: [12, 26],
-            }),
-            title: s.name,
-            interactive: true,
-          }).on("click", function () { if (onSelect) onSelect(s.id); })
-            .addTo(state.planLayer);
+      var stops = options.showPlan && Array.isArray(options.planStops) ? options.planStops : [];
+      var points = items.concat(stops);
+      var offsets;
+      function layout() {
+        offsets = MapLayout.offsets(points, 44, function (a) {
+          return state.map.latLngToLayerPoint([a.lat, a.lng]);
         });
       }
-
-      /* Подгоняем видимую область под текущие точки, если есть что показывать. */
-      var markerBounds = state.markers.getLayers().length
-        ? state.markers.getBounds()
-        : null;
-      if (markerBounds && markerBounds.isValid()) {
-        state.map.fitBounds(markerBounds.pad(0.2), { maxZoom: 11, animate: false });
+      // Границы — по настоящим координатам, включая план вне фильтра.
+      if (points.length) {
+        state.map.fitBounds(L.latLngBounds(points.map(function (a) { return [a.lat, a.lng]; })).pad(0.2),
+          { maxZoom: 11, animate: false });
       }
+      layout();
+      var displaced = [];
+      function displayPoint(a) {
+        var offset = offsets.get(a.id);
+        var point = state.map.latLngToLayerPoint([a.lat, a.lng]);
+        return state.map.layerPointToLatLng(L.point(point.x + offset.x, point.y + offset.y));
+      }
+      items.forEach(function (a) {
+        var meta = (options.typesMeta && options.typesMeta[a.type]) || { emoji: "📍" };
+        var marker = L.marker(displayPoint(a), {
+          icon: buildIcon(a.type, meta.emoji), title: a.name, alt: a.name,
+        }).on("click", function () { if (onSelect) onSelect(a.id); });
+        var line = null;
+        if (offsets.get(a.id).moved) {
+          line = L.polyline([[a.lat, a.lng], displayPoint(a)], {
+            color: "#64748b", weight: 1.5, interactive: false,
+          }).addTo(state.markers);
+        }
+        state.markers.addLayer(marker);
+        displaced.push({ item: a, marker: marker, line: line });
+      });
+
+      /* Маршрут идёт по настоящим координатам; номера — над своими
+         маркерами. Остановка открывается и когда её нет в фильтре. */
+      if (stops.length > 1) {
+        L.polyline(stops.map(function (s) { return [s.lat, s.lng]; }), {
+          color: "#f5a524", weight: 3, opacity: 0.85, dashArray: "7 5", interactive: false,
+        }).addTo(state.planLayer);
+      }
+      stops.forEach(function (s, i) {
+        var marker = L.marker(displayPoint(s), {
+          icon: L.divIcon({
+            className: "lm-plan-num",
+            html: '<div class="lm-num-pin">' + (i + 1) + "</div>",
+            iconSize: [24, 28], iconAnchor: [12, 56],
+          }),
+          title: s.name, alt: s.name,
+        }).on("click", function () { if (onSelect) onSelect(s.id); })
+          .addTo(state.planLayer);
+        displaced.push({ item: s, marker: marker });
+      });
+      // Смещения остаются пиксельными при любом масштабе, не становятся
+      // ложными географическими координатами после zoom.
+      state.reposition = function () {
+        layout();
+        displaced.forEach(function (entry) {
+          var point = displayPoint(entry.item);
+          entry.marker.setLatLng(point);
+          if (entry.line) entry.line.setLatLngs([[entry.item.lat, entry.item.lng], point]);
+        });
+      };
+      state.map.on("zoomend", state.reposition);
       return state.map;
     });
   }

@@ -27,8 +27,8 @@ for f in static/*.js; do node --check "$f"; done   # синтаксис всех
 .venv/bin/ruff check app tests              # линтер
 ```
 
-**418 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
-плюс **131 JS-тест** (`tests/js/`, `node:test` без зависимостей):
+**423 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
+плюс **143 JS-тест** (`tests/js/`, `node:test` без зависимостей):
 
 | Модуль | Что покрывает |
 |---|---|
@@ -69,6 +69,37 @@ for f in static/*.js; do node --check "$f"; done   # синтаксис всех
 - Inline-обработчики (`onerror=` и т.п.) во фронтенде запрещены CSP —
   аварии картинок обрабатывает делегированный listener по
   `data-img-fallback` (`remove` / `hide` / `soft`).
+
+## Проверка настоящего браузера (опционально)
+
+Основной CI остаётся без браузерных зависимостей. Перед релизом можно
+проверить интерфейс целиком, отдельно от HTTP-smoke:
+
+```bash
+.venv/bin/pip install -r requirements-browser.txt
+.venv/bin/playwright install chromium
+# В другом терминале запустить приложение по инструкции выше.
+.venv/bin/python tools/browser_smoke.py
+# Другой адрес или уже установленный Chromium:
+BROWSER_URL=http://localhost:8000 CHROMIUM_PATH=/usr/bin/chromium \
+  .venv/bin/python tools/browser_smoke.py
+```
+
+Сценарий использует отдельные браузерные контексты и проходит UI при
+1280 и 390 px: 7 вопросов квиза, возврат назад, план и его импорт по ссылке
+в чистом контексте, маршрут на обеих картах, поиск и ссылка каталога,
+избранное после перезагрузки, ссылка места, модалка с клавиатуры и
+возврат фокуса, два совпавших маркера (настоящий клик, без `force`),
+Leaflet/зум/фильтры, RU/EN и офлайн-перезагрузка под service worker.
+
+Внешние тайлы OSM подменяются картинкой: это проверка Leaflet и нашего
+кода, **не доступности внешнего сервиса**. Новости и погоду нужно также
+проверить отдельно на живом сервере. Chromium с узким viewport не
+заменяет проверку установки PWA и жестов на настоящем iPhone/Android.
+
+Переходы квиза дополнительно проверяет `tests/js/quiz-flow.test.js`, а
+раскладку совпавших маркеров — `tests/js/map-layout.test.js`; эти тесты
+без зависимостей входят в обычный CI.
 
 ## CI
 
@@ -146,7 +177,7 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 - **Проверить сценарий выката без сервера?**
   `DRY_RUN=1 APP_DIR=$PWD ./deploy/deploy.sh HEAD` — репетиция: проверки
   и план, ничего не меняет. С тегом сверяется и версия:
-  `EXPECT_VERSION=1.10.0 ./deploy/deploy.sh --dry-run HEAD`.
+  `EXPECT_VERSION=1.10.1 ./deploy/deploy.sh --dry-run HEAD`.
 - **Лента «офлайн» в dev-машине?** Проверьте исходящий HTTPS
   (`curl -I https://tass.ru/rss/v2.xml`). При недоступной сети приложение
   корректно показывает снапшот — это штатный офлайн-режим.
@@ -169,8 +200,8 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 5. PR в `main`: CI обязан быть зелёным (test + docker build).
 6. Выкатить: `git pull && docker compose up -d --build` на сервере —
    подробности и бэкапы в [deploy.md](deploy.md). Если настроен
-   автодеплой, достаточно `git tag v1.10.0 && git push --tags`:
+   автодеплой, достаточно `git tag v1.10.1 && git push --tags`:
    workflow сам прогонит тесты, репетицию выката и выкатит релиз.
    До первого выката сценарий стоит проверить репетицией
-   (`./deploy/deploy.sh --dry-run v1.10.0`) или ручным запуском workflow
+   (`./deploy/deploy.sh --dry-run v1.10.1`) или ручным запуском workflow
    с `dry_run=true` — ни сервера, ни секретов для этого не нужно.

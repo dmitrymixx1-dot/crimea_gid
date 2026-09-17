@@ -516,6 +516,13 @@ button { font: inherit; cursor: pointer; }
 /* ---------- news search ---------- */
 .news-search { flex: 0 1 240px; min-width: 180px; padding: 8px 14px; }
 
+#nav-toggle {
+  display: none; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 10px; border: 1.5px solid var(--line);
+  background: var(--card); font-size: 19px; color: var(--sea-dark);
+}
+
+
 /* ---------- responsive ---------- */
 @media (max-width: 720px) {
   .nav { display: none; position: absolute; top: 60px; left: 0; right: 0;
@@ -531,12 +538,6 @@ button { font: inherit; cursor: pointer; }
   .rec-img { width: 84px; min-width: 84px; height: 78px; }
   .news-search { flex: 1 1 100%; }
   .map-wrap #lm-interactive { height: 420px; }
-}
-
-#nav-toggle {
-  display: none; align-items: center; justify-content: center;
-  width: 40px; height: 40px; border-radius: 10px; border: 1.5px solid var(--line);
-  background: var(--card); font-size: 19px; color: var(--sea-dark);
 }
 
 /* ---------- print: только план (body.print-plan) ---------- */

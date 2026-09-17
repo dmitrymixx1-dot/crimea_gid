@@ -960,3 +960,14 @@ def test_ci_rehearses_the_deploy_script():
     ci = (STATIC_DIR.parent / ".github" / "workflows" / "ci.yml").read_text("utf-8")
     assert "DRY_RUN=1" in ci and "deploy/deploy.sh" in ci
     assert "bash -n" in ci
+
+
+def test_map_layout_is_shared_and_precached():
+    src = read("map-layout.js")
+    html = read("index.html")
+    assert "module.exports" in src and "root.MapLayout" in src
+    assert html.index("/static/map-layout.js") < html.index("/static/leaflet-map.js")
+    assert html.index("/static/map-layout.js") < html.index("/static/app.js")
+    assert '"/static/map-layout.js"' in read("sw.js")
+    for name in ("app.js", "leaflet-map.js"):
+        assert "MapLayout.offsets" in read(name)
