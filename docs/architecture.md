@@ -21,7 +21,7 @@ app/
     ├── load.py           # загрузка JSON-данных (lru_cache)
     ├── recommend.py      # квиз → баллы → рекомендации → план по дням
     ├── news.py           # агрегация RSS+Telegram → фильтр «Крым» → темы → кэш
-    ├── weather.py        # Open-Meteo → нормализация → часовой кэш
+    ├── weather.py        # Open-Meteo → нормализация → часовой кэш + hourly
     └── marine.py         # Open-Meteo Marine → вода/волна → купальный индекс
 
 static/
@@ -29,6 +29,7 @@ static/
 ├── app.js                # SPA: роутер, состояние, рендер-функции, PWA
 ├── plan-link.js          # UMD: сериализация плана в ссылку (тестируется)
 ├── catalog-link.js       # UMD: фильтры каталога ↔ URL (тестируется)
+├── hourly.js             # UMD: окно почасового прогноза (тестируется)
 ├── style.css             # стили + @media print + a11y (skip-link, sr-only)
 ├── sw.js                 # service worker (офлайн-оболочка)
 └── manifest.webmanifest  # PWA-манифест
@@ -111,9 +112,16 @@ WeatherService.get(city?, refresh?)
   │ miss в кэше (WEATHER_TTL, 1 час)
   ▼ asyncio.gather по 18 городам
 Open-Meteo: current (temp/code/wind) + daily ×4 (code/max/min)
+            + hourly ×24 (temp/code/precipitation_probability)
   ▼ нормализация: WMO-код → (эмодзи, русская подпись),
-    день недели из локальной даты прогноза, округление °C
+    день недели из локальной даты прогноза, округление °C,
+    часовое окно от `current.time` сравнением ISO-строк
 ```
+
+Часовое окно сервер только **нарезает**; показывает его клиент
+(`hourly.js`) по фактическому крымскому времени: ответ кэшируется на час,
+и «сейчас» в нём к концу часа устаревает. Полностью устаревшее окно
+отдаётся пустым — фронт честно прячет блок вместо вчерашних часов.
 
 Исключение по одному городу помечает его `available: false`,
 остальные продолжают работать; `online: false` только если упали все.

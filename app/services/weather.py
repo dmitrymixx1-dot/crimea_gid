@@ -2,6 +2,14 @@
 
 Параллельный запрос по всем городам, кэш на час (WEATHER_TTL).
 Если сеть недоступна — отдаём available=false, фронт скрывает виджет.
+
+Кроме текущего состояния и дневного прогноза сервис отдаёт `hourly` —
+температуру, код погоды и вероятность осадков на HOURLY_HOURS вперёд.
+Времена в ответе — локальные для города (timezone=auto), поэтому окно
+отсчитывается от `current.time` сравнением ISO-строк: конвертация в
+пояс устройства тут только испортила бы (naive→UTC сдвигает час назад).
+Какое окно показать, решает фронт (`static/hourly.js`) по крымскому
+времени — серверный ответ живёт в кэше до часа и «сейчас» в нём стареет.
 """
 
 import asyncio
@@ -69,12 +77,66 @@ WMO = {
 }
 WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
+# Сколько часов вперёд отдаём. Фронт показывает 12 и умеет брать окно
+# от фактического часа: ответ живёт в кэше до WEATHER_TTL, а за сутки
+# прогноз успевает стать точнее.
+HOURLY_HOURS = 24
+
 
 def _code_info(code) -> tuple[str, str]:
     try:
         return WMO.get(int(code), ("🌡️", ""))
     except (TypeError, ValueError):
         return ("🌡️", "")
+
+
+def _number(value):
+    """Число из ответа модели или None: null/мусор не должны ломать прогноз."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return round(float(value))
+
+
+def hourly_window(hourly: dict, now_iso, limit: int = HOURLY_HOURS) -> list[dict]:
+    """Окно почасового прогноза от текущего часа города.
+
+    `now_iso` — `current.time` из ответа Open-Meteo («2026-09-17T12:15»,
+    локальное время города). Сравниваем по часу («2026-09-17T12»)
+    лексикографически: ISO-строки упорядочены как время, а конвертация
+    в чужой пояс сдвинула бы час. Текущий час попадает в окно — фронт
+    подписывает его «сейчас».
+    """
+    times = hourly.get("time") or []
+    temps = hourly.get("temperature_2m") or []
+    codes = hourly.get("weather_code") or []
+    precips = hourly.get("precipitation_probability") or []
+    if not isinstance(times, list) or not times:
+        return []
+
+    key = str(now_iso)[:13] if isinstance(now_iso, str) else ""
+    start = 0
+    if key:
+        start = next(
+            (i for i, t in enumerate(times) if isinstance(t, str) and t[:13] >= key),
+            -1,
+        )
+        if start == -1:
+            # Модель отстала от current (или часы кончились) — не выдумываем
+            # окно «сейчас»: отдаём пустой список, фронт прячет блок.
+            return []
+
+    out = []
+    for i in range(start, min(start + limit, len(times))):
+        emoji, _ = _code_info(codes[i] if i < len(codes) else None)
+        out.append(
+            {
+                "t": times[i],
+                "temp": _number(temps[i]) if i < len(temps) else None,
+                "emoji": emoji,
+                "precip": _number(precips[i]) if i < len(precips) else None,
+            }
+        )
+    return out
 
 
 class WeatherService:
@@ -89,6 +151,7 @@ class WeatherService:
             "longitude": lon,
             "current": "temperature_2m,weather_code,wind_speed_10m",
             "daily": "weather_code,temperature_2m_max,temperature_2m_min",
+            "hourly": "temperature_2m,weather_code,precipitation_probability",
             "timezone": "auto",
             "forecast_days": 4,
         }
@@ -125,6 +188,7 @@ class WeatherService:
                 "wind": round(cur.get("wind_speed_10m", 0)),
             },
             "forecast": forecast,
+            "hourly": hourly_window(data.get("hourly") or {}, cur.get("time")),
         }
 
     def _unavailable(self, city_id: str, name: str) -> dict:

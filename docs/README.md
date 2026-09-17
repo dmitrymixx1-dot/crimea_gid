@@ -19,6 +19,7 @@
 │  static/   │ ◄───────────► │  ├─ services/recommend.py (квиз) │
 │            │               │  ├─ services/news.py (RSS+TG)    │
 │            │               │  ├─ services/weather.py (погода) │
+│            │               │  ├─ services/marine.py (море)    │
 │            │               │  └─ services/load.py (данные)    │
 └────────────┘               └─────────────────────────────────┘
         ▲                              ▲

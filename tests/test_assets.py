@@ -17,6 +17,7 @@ FRONT_FILES = [
     "plan-link.js",
     "catalog-link.js",
     "favs-link.js",
+    "hourly.js",
     "sw.js",
 ]
 
@@ -356,3 +357,44 @@ def test_sea_block_has_an_honest_disclaimer():
     app = read("app.js")
     assert "морская модель" in app.lower()
     assert "оборудованных пляжах" in app
+
+
+# ---------------- почасовой прогноз (фаза 1.4) ----------------
+
+
+def test_hourly_module_is_umd_and_wired():
+    src = read("hourly.js")
+    assert "module.exports" in src and "root.Hourly" in src
+    assert '"/static/hourly.js"' in read("sw.js")
+    assert 'src="/static/hourly.js"' in read("index.html")
+    assert "Hourly.next" in read("app.js")
+
+
+def test_hourly_window_uses_crimea_time_like_open_now():
+    """Ответ API живёт в кэше до часа: «сейчас» отсчитывает клиент,
+    и считает он по Крыму, а не по поясу устройства."""
+    src = read("hourly.js")
+    assert "TZ_OFFSET_MIN = 3 * 60" in src
+    assert "getTimezoneOffset" in src
+    app = read("app.js")
+    assert "Hourly.next(city.hourly, new Date())" in app
+
+
+def test_hourly_block_is_native_details_without_js_toggle():
+    """CSP запрещает inline-обработчики, а <details> даёт раскрытие
+    бесплатно — вместе с клавиатурой и скринридерами."""
+    app = read("app.js")
+    assert '<details class="w-hours">' in app
+    assert "<summary>По часам</summary>" in app
+    # Раскрытие не требует обработчиков клика вокруг блока.
+    block = app[app.index("function hourlyStrip") : app.index("function weatherStrip")]
+    assert "addEventListener" not in block
+
+
+def test_hourly_precip_hint_lives_in_the_module():
+    """Порог «💧 от 30%» — правило модуля, а не строчка во фронте."""
+    app = read("app.js")
+    assert "precipLabel" in app
+    block = app[app.index("function hourlyStrip") : app.index("function weatherStrip")]
+    assert ">=" not in block.replace("h.precipLabel ?", "")  # порог не дублируется
+    assert "PRECIP_HINT" in read("hourly.js")

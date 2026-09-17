@@ -22,15 +22,13 @@ python3 -m venv .venv
 .venv/bin/python -m pytest tests/ -q        # весь свит
 .venv/bin/python -m pytest tests/test_news.py -q   # один модуль
 .venv/bin/python -m pytest tests/ -k weather -q    # по имени
-node --test "tests/js/*.test.js"            # JS-тесты шаринга плана и каталога
-node --check static/app.js && node --check static/plan-link.js \
-  && node --check static/catalog-link.js && node --check static/favs-link.js \
-  && node --check static/sw.js
+node --test "tests/js/*.test.js"            # JS-тесты модулей фронта (node:test)
+for f in static/*.js; do node --check "$f"; done   # синтаксис всех модулей
 .venv/bin/ruff check app tests              # линтер
 ```
 
-**272 Python-теста**, сеть не используется (все внешние вызовы заглушены),
-плюс **48 JS-тестов** (`tests/js/`, `node:test` без зависимостей):
+**298 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
+плюс **63 JS-теста** (`tests/js/`, `node:test` без зависимостей):
 
 | Модуль | Что покрывает |
 |---|---|
@@ -42,12 +40,13 @@ node --check static/app.js && node --check static/plan-link.js \
 | `test_recommends.py` | матчинг (`_score_attraction` по факторам), профили, фильтры новостей, планировщик (слоты, районы, лимиты, запас) |
 | `test_news.py` | скоринг «Крым», темы, дедупликация, TTL и файл-кэш, офлайн-fallback, форма payload |
 | `test_telegram.py` | парсер `t.me/s/`, сквозной поток telegram-источника |
-| `test_weather.py` | WMO-коды, разбор ответа Open-Meteo, день недели, кэш, фильтр по городу, падение сети, `CITIES` (18 курортов, границы, совпадение с каталогом) |
+| `test_weather.py` | WMO-коды, разбор ответа Open-Meteo, день недели, часовое окно (`hourly_window`: старт с текущего часа, лимит, отставшая модель, короткие массивы и мусор вместо чисел), кэш, фильтр по городу, падение сети, `CITIES` (18 курортов, границы, совпадение с каталогом) |
 | `test_sea.py` | купальный индекс: пороги воды (23/20/16 °C) и волны (1,0/1,5 м), подписи волнения, вердикт по сырым значениям, разбор Open-Meteo Marine, мусор вместо чисел, кэш, фильтр по точке, сводка `warmest`, согласованность `SEA_POINTS` с `CITIES` (15 точек вынесены в море рядом со «своим» городом, у материковых курортов точек нет) |
 | `test_e2e_smoke.py` | сквозные сценарии: квиз → план → ссылка (3 профиля из чек-листа), выполнимость плана по дням, deep-link места, ссылка на подборку каталога, precache PWA, контракт `/api/health` |
 | `tests/js/catalog-link.test.js` | фильтры каталога ↔ URL: дефолты не пишутся, round-trip кириллицы/спецсимволов, откат мусорной сортировки, флаг `open=1` |
 | `tests/js/favs-link.test.js` | избранное ↔ URL: round-trip id, дубли и мусор, только id из каталога получателя, устойчивость к битому query |
 | `tests/js/catalog-page.test.js` | порционный показ: размер первой порции, шаг догрузки, сужение подборки фильтром, устойчивость к мусору |
+| `tests/js/hourly.test.js` | окно почасового прогноза: крымское время вместо пояса устройства, «сейчас» ровно один раз и первым, переход через полночь, отставший кэш API (пустое окно вместо вчерашних часов), размер окна и мусорные значения, порог подписи осадков |
 | `tests/js/open-now.test.js` | «открыто сейчас»: крымское время вне пояса устройства, дневные границы `firstDay`/`lastDay` (в т.ч. зимние диапазоны), сезоны через Новый год, границы окна, выходные дни, дата открытия в подписи вне сезона, битые правила |
 
 Соглашения:
@@ -101,6 +100,7 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 | Новый RSS-источник | строка в `sources.json`, `"type": "rss"` | `test_data.py::test_sources_urls_unique` |
 | Новый TG-канал | строка в `sources.json`, `"type": "telegram"`, url `https://t.me/s/<канал>` (только публичные) | то же |
 | Новый город погоды | кортеж в `CITIES` (`app/services/weather.py`) | `test_weather.py` |
+| Новое поле прогноза | параметр в `_fetch_city` (`hourly=…`) + разбор в `hourly_window()`; показ — `static/hourly.js` (правило окна держат JS-тесты) | `test_weather.py`, `tests/js/hourly.test.js` |
 | Новая морская точка | кортеж в `SEA_POINTS` (`app/services/marine.py`), id — как у курорта в `CITIES`, координаты — в открытой воде в 1–8 км от города | `test_sea.py` |
 | Новый порог купального индекса | правила `verdict()` в `app/services/marine.py` (во фронте их дублировать нельзя) | `test_sea.py` |
 | Новый тег | `TAGS` + `TAG_EMOJI`, профиль в `PROFILES`, связь с лентой в `PURPOSE_TOPICS` (`recommend.py`) + вариант в `quiz.json` | `test_data.py`, `test_recommends.py` |

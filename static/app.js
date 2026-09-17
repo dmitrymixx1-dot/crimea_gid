@@ -225,6 +225,29 @@ function waveText(p) {
 }
 
 /* ---------------- home ---------------- */
+/* Почасовой прогноз: окно считает Hourly.next по крымскому времени —
+   ответ API живёт в кэше до часа, и «сейчас» в нём стареет. <details>
+   даёт раскрытие без JS-обработчиков (CSP: только внешние скрипты)
+   и работает с клавиатуры. */
+function hourlyStrip(city) {
+  if (typeof Hourly === "undefined" || !Array.isArray(city.hourly)) return "";
+  const hours = Hourly.next(city.hourly, new Date());
+  if (!hours.length) return "";
+  return `
+    <details class="w-hours">
+      <summary>По часам</summary>
+      <div class="w-hourly">
+        ${hours.map(h => `
+          <span class="w-hour${h.label === "сейчас" ? " w-hour-now" : ""}">
+            <span class="w-hour-t">${esc(h.label)}</span>
+            <span class="w-hour-v">${esc(h.emoji)} ${fmtTemp(h.temp)}</span>
+            ${h.precipLabel ? `<span class="w-hour-p">${esc(h.precipLabel)}</span>` : ""}
+          </span>`).join("")}
+      </div>
+      <p class="w-hourly-note">Температура и вероятность осадков по Open-Meteo.</p>
+    </details>`;
+}
+
 function weatherStrip() {
   const w = state.weather;
   if (!w) return "";
@@ -251,6 +274,7 @@ function weatherStrip() {
               ${c.forecast.slice(1, 4).map(f =>
                 `<span class="w-day" title="${f.day}">${f.day} ${f.emoji} ${fmtTemp(f.max)}</span>`).join("")}
             </div>
+            ${hourlyStrip(c)}
           </div>`).join("")}
       </div>
     </section>`;
