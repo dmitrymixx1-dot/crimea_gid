@@ -27,8 +27,8 @@ for f in static/*.js; do node --check "$f"; done   # синтаксис всех
 .venv/bin/ruff check app tests              # линтер
 ```
 
-**365 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
-плюс **89 JS-тестов** (`tests/js/`, `node:test` без зависимостей):
+**384 Python-теста**, сеть не используется (все внешние вызовы заглушены),
+плюс **125 JS-тестов** (`tests/js/`, `node:test` без зависимостей):
 
 | Модуль | Что покрывает |
 |---|---|
@@ -49,6 +49,9 @@ for f in static/*.js; do node --check "$f"; done   # синтаксис всех
 | `tests/js/catalog-page.test.js` | порционный показ: размер первой порции, шаг догрузки, сужение подборки фильтром, устойчивость к мусору |
 | `tests/js/rate-limit.test.js` | ответ 429: разбор `Retry-After` (мусор → `null`, потолок часа), русские формы минут, «через 30 с» / «через 5 минут», текст без времени ожидания |
 | `tests/js/hourly.test.js` | окно почасового прогноза: крымское время вместо пояса устройства, «сейчас» ровно один раз и первым, переход через полночь, отставший кэш API (пустое окно вместо вчерашних часов), размер окна и мусорные значения, порог подписи осадков |
+| `test_i18n.py` | контракт английской локали: `en.json` покрывает строки фронта без мёртвых ключей, `places` переводит ровно те поля, что есть в данных, английские значения не содержат кириллицы (кроме бренда), `NUMBER_RE` синхронна с `I18n.fold`, бандл совпадает с источником (`build.py --check`) |
+| `tests/js/i18n.test.js` | вторая речь: сворачивание чисел и порядок поиска ключа (буквал важнее свёрнутого), `params` в обе стороны, обход DOM (узлы, `title`/`aria-label`/`placeholder`/`alt`, `data-i18n="skip"`), идемпотентность, `applyLabels`/`stripLabels`, выбор языка |
+| `tests/js/i18n-labels.test.js` | покрытие подписей, которые СОБИРАЮТ модули: вызывает `CatalogPage.statusLabel`, `RateLimit.waitText/message/budgetText`, `OpenNow.label` (все ветки и 12 месяцев) и `Hourly.hourLabel` и требует, чтобы словарь знал результат |
 | `tests/js/open-now.test.js` | «открыто сейчас»: крымское время вне пояса устройства, дневные границы `firstDay`/`lastDay` (в т.ч. зимние диапазоны), сезоны через Новый год, границы окна, выходные дни, дата открытия в подписи вне сезона, битые правила |
 
 Соглашения:
@@ -98,7 +101,10 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 
 | Задача | Что править | Тесты |
 |---|---|---|
-| Новое место | объект в `app/data/attractions.json` (схема — [data.md](data.md#attractionsjson)); `hours` — только при стабильном расписании, вместе с парным `schedule` | авто: `test_data.py` |
+| Новое место | объект в `app/data/attractions.json` (схема — [data.md](data.md#attractionsjson)); `hours` — только при стабильном расписании, вместе с парным `schedule`; **плюс перевод**: запись в `tools/i18n_en/tr_places.py` (id → те же поля, что есть в данных) и `build.py` | авто: `test_data.py`, `test_i18n.py` |
+| Новая строка интерфейса | русская фраза в `static/index.html` или `static/app.js` — обходчик переведёт её сама; если вставка стоит внутри фразы, выносить шаблоном: `t("Показано {seen} из {total}", …)`. Дыры: `python tools/i18n_extract.py --missing`; перевод — в `tools/i18n_en/tr_ui.py`, затем `build.py` | `test_i18n.py` (покрытие двустороннее: ни дыр, ни мёртвых ключей) |
+| Новый источник ленты | строка в `sources.json` + `labels` в `tools/i18n_en/tr_ui.py` (название издания в бейдже переводят транслитерацией, заголовок новости — чужой текст) | `test_data.py::test_sources_urls_unique`, `test_assets.py::test_news_skips_only_foreign_text` |
+| Новая подпись модуля | строку собирает `static/*.js` (например «через 5 минут») — в словарь её кладут в свёрнутом виде («через {n} минут»); статика её не видит, поэтому проверят JS-тесты | `tests/js/i18n-labels.test.js` |
 | Новый RSS-источник | строка в `sources.json`, `"type": "rss"` | `test_data.py::test_sources_urls_unique` |
 | Новый TG-канал | строка в `sources.json`, `"type": "telegram"`, url `https://t.me/s/<канал>` (только публичные) | то же |
 | Новый город погоды | кортеж в `CITIES` (`app/services/weather.py`) | `test_weather.py` |
@@ -115,7 +121,10 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 | Новый эндпоинт | маршрут в `main.py`; документация — [api.md](api.md) | `test_api.py` |
 
 После правки данных всегда прогоняйте `pytest tests/test_data.py` —
-свит проверяет согласованность датасета со словарями кода.
+свит проверяет согласованность датасета со словарями кода. После правки
+переводов — `python tools/i18n_en/build.py` (бандл генерируется из
+`tools/i18n_en/`, руками `static/i18n/en.json` не правят: `test_i18n.py`
+сверит файл с источником).
 
 ## Переменные окружения
 
@@ -144,10 +153,13 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
 1. Поднять `APP_VERSION` в `app/config.py` (semver), версию в README,
    пример в `docs/api.md` и `CACHE` в `static/sw.js`
    (согласованность проверяет `test_config.py`).
-2. Прогнать `ruff check`, `pytest`, `node --check` и `node --test`.
-3. Записать изменения в `CHANGELOG.md`, отметить пункты в `ROADMAP.md`.
-4. PR в `main`: CI обязан быть зелёным (test + docker build).
-5. Выкатить: `git pull && docker compose up -d --build` на сервере —
+2. Если менялись строки фронта или данные каталога — пересобрать
+   `python tools/i18n_en/build.py` (новый префикс `CACHE` в `sw.js` сам
+   сбросит оболочку у тех, кто уже её держит).
+3. Прогнать `ruff check`, `pytest`, `node --check` и `node --test`.
+4. Записать изменения в `CHANGELOG.md`, отметить пункты в `ROADMAP.md`.
+5. PR в `main`: CI обязан быть зелёным (test + docker build).
+6. Выкатить: `git pull && docker compose up -d --build` на сервере —
    подробности и бэкапы в [deploy.md](deploy.md). Если настроен
-   автодеплой, достаточно `git tag v1.7.0 && git push --tags`:
+   автодеплой, достаточно `git tag v1.8.0 && git push --tags`:
    workflow сам прогонит тесты и выкатит релиз.

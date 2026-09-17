@@ -40,6 +40,9 @@
         <a href="#/news" data-nav="news">Новости</a>
       </nav>
       <span id="net-badge" class="badge badge-muted" title="Статус опроса источников">…</span>
+      <!-- Речь экрана: EN/RU. Подпись и title ставит app.js — язык знает
+           только он (сохранённый выбор + язык браузера). -->
+      <button id="lang-toggle" class="badge badge-muted" aria-pressed="false">EN</button>
       <button id="nav-toggle" aria-label="Меню" aria-expanded="false">☰</button>
     </div>
   </header>
@@ -57,6 +60,7 @@
   <div id="modal-root"></div>
   <div id="toast-root" role="status" aria-live="polite"></div>
 
+  <script src="/static/i18n.js"></script>
   <script src="/static/plan-link.js"></script>
   <script src="/static/catalog-link.js"></script>
   <script src="/static/catalog-page.js"></script>

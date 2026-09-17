@@ -19,6 +19,7 @@ FRONT_FILES = [
     "favs-link.js",
     "hourly.js",
     "rate-limit.js",
+    "i18n.js",
     "sw.js",
 ]
 
@@ -128,19 +129,66 @@ def test_index_connects_catalog_link_module():
     assert 'src="/static/plan-link.js"' in html
 
 
+def test_index_connects_i18n_before_app():
+    """Модуль локализации обязан встать до `app.js`: оттуда берут `I18n.t`."""
+    html = read("index.html")
+    scripts = re.findall(r'<script src="(/static/[^"]+)"', html)
+    assert "/static/i18n.js" in scripts
+    assert scripts.index("/static/i18n.js") < scripts.index("/static/app.js")
+    assert 'id="lang-toggle"' in html, "кнопки переключения речи нет в каркасе"
+    # Кнопка — значок в шапке: без состояния «включено» она выглядела бы
+    # декоративной.
+    css = read("style.css")
+    assert '#lang-toggle[aria-pressed="true"]' in css
+    assert "#lang-toggle:hover" in css
+
+
 def test_sw_shell_covers_umd_modules():
     sw = read("sw.js")
     assert '"/static/catalog-link.js"' in sw
     assert '"/static/plan-link.js"' in sw
+    # Модуль речи — часть оболочки, а сам английский пакет — нет: его качает
+    # только англичанин, и офлайн-первый-визит честно остаётся русским.
+    assert '"/static/i18n.js"' in sw
+    assert '"/static/i18n/en.json"' not in sw  # комментарий про него — не путь в SHELL
     # сырой index.html с плейсхолдером __ORIGIN__ в precache не нужен:
     # оболочка кеширует отрендеренный ответ GET /
     assert '"/static/index.html"' not in sw
     assert f"crimea-gid-v{APP_VERSION}" in sw
 
 
+def test_place_deeplink_localizes_catalog_chrome():
+    """`#/place/<id>` выходит из роутера раньше общего localize() — и всё
+    равно обязан перевести шапку каталога, пока модалка переводит себя."""
+    app = read("app.js")
+    block = re.search(r"if \(path\.startsWith\(\"place/\"\)\)(.*?)\n  \}", app, re.S)
+    assert block, "ветка place/ пропала из роутера"
+    assert "localize();" in block.group(1)
+
+
+def test_news_skips_only_foreign_text():
+    """Чужое (RSS-заголовок и анонс) обходчик не трогает, своё — переводит.
+
+    `data-i18n="skip"` на всей карточке оставил бы по-русским и бейдж
+    издания, и время, и темы: они-то как раз наши подписи.
+    """
+    app = read("app.js")
+    block = app[
+        app.index("function newsItemHTML") : app.index("function newsItemHTML") + 1600
+    ]
+    assert 'class="news-title" data-i18n="skip"' in block
+    assert 'class="news-summary" data-i18n="skip"' in block
+    assert '<div class="news-item" data-i18n="skip">' not in block
+
+
 def test_catalog_link_module_is_umd():
     src = read("catalog-link.js")
     assert "module.exports" in src and "root.CatalogLink" in src
+
+
+def test_i18n_module_is_umd():
+    src = read("i18n.js")
+    assert "module.exports" in src and "root.I18n" in src
 
 
 # ---------------- деплой-конфигурация (фаза 1.0) ----------------
