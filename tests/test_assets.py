@@ -9,7 +9,7 @@ import json
 import re
 
 from app.config import APP_VERSION, STATIC_DIR
-from app.services.load import get_attractions
+from app.services.load import get_attractions, get_sources
 
 FRONT_FILES = [
     "index.html",
@@ -121,6 +121,41 @@ def test_no_javascript_urls():
 def test_manifest_mentions_real_catalog_size():
     m = json.loads(read("manifest.webmanifest"))
     assert str(len(get_attractions())) in m["description"], m["description"]
+
+
+def test_footer_attribution_matches_real_sources():
+    """Вывеска в футере называет источники и внешние сервисы — значит, она
+    обязана совпадать с `sources.json`, а не оставаться в том виде, в каком
+    её написали при трёх лентах. Про OSM отдельно: тайлы карты требуют
+    указания авторства, и футер — то место, где оно живёт всегда, а не
+    только во включённом слое Leaflet.
+
+    Числа ищем по «число + начало слова»: склонение («4 телеграм-канала»,
+    «5 телеграм-каналов») тест ломать не должно. Английская вывеска сверяется
+    с тем же источником — иначе EN-пакет уедет в свою сторону.
+    """
+    sources = get_sources()
+    rss = sum(1 for s in sources if s["type"] == "rss")
+    tg = sum(1 for s in sources if s["type"] == "telegram")
+    assert rss and tg, "лента без RSS или без телеграма — атрибуция врёт"
+
+    footer = re.search(r"<footer.*?</footer>", read("index.html"), re.S).group(0)
+    for word, expected in (("RSS", rss), ("телеграм", tg)):
+        found = re.search(rf"(\d+)\s+{word}", footer)
+        assert found, f"в футере нет числа перед «{word}»: {footer}"
+        assert int(found.group(1)) == expected, (
+            f"{word}: {found.group(1)} != {expected}"
+        )
+    for service in ("Open-Meteo", "OpenStreetMap"):
+        assert service in footer, f"в футере не назван {service}"
+
+    en = json.loads(read("i18n/en.json"))
+    line = next(v for k, v in en["ui"].items() if k.startswith("Новости: "))
+    for word, expected in (("RSS", rss), ("Telegram", tg)):
+        found = re.search(rf"(\d+)\s+{word}", line)
+        assert found and int(found.group(1)) == expected, f"EN {word}: {line}"
+    for service in ("Open-Meteo", "OpenStreetMap"):
+        assert service in line, f"в английской вывеске нет {service}: {line}"
 
 
 def test_index_connects_catalog_link_module():

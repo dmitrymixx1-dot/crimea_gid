@@ -16,9 +16,9 @@ UI = {
         "🌊 Крым.Гид — a travel helper for Crimea: a quiz, a catalogue and a live"
         " news feed from the peninsula."
     ),
-    "Новости: публичные RSS-ленты (ТАСС, РБК, News.ru, КРИМ-ИНФОРМ, Крым.Цифровой). Погода: Open-Meteo.": (
-        "News: public RSS feeds (TASS, RBC, News.ru, KRIM-INFORM, Crimea.Digital)."
-        " Weather: Open-Meteo."
+    "Новости: 7 RSS-лент и 4 телеграм-канала. Погода и море: Open-Meteo. Карта: OpenStreetMap.": (
+        "News: 7 RSS feeds and 4 Telegram channels. Weather and sea: Open-Meteo."
+        " Map: OpenStreetMap."
     ),
     # --- шапка, переключатель речи ---
     "Переключить на русский": "Switch to Russian",

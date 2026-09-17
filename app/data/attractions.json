@@ -15,7 +15,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 2,
     "duration_h": 2,
@@ -58,7 +59,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 2,
     "duration_h": 3,
@@ -110,7 +112,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 1,
     "duration_h": 4,
@@ -160,7 +163,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 2,
     "duration_h": 3,
@@ -209,7 +213,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 2,
     "duration_h": 3,
@@ -260,7 +265,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 2,
     "duration_h": 3,
@@ -299,7 +305,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 1,
     "duration_h": 2,
@@ -456,7 +463,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 1,
     "duration_h": 2,
@@ -576,8 +584,10 @@
       "family"
     ],
     "season": [
+      "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 1,
     "duration_h": 2,
@@ -765,8 +775,10 @@
       "family"
     ],
     "season": [
+      "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 1,
     "duration_h": 5,
@@ -1321,7 +1333,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 1,
     "duration_h": 4,
@@ -1356,7 +1369,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 1,
     "duration_h": 3,
@@ -1391,7 +1405,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 2,
     "duration_h": 4,
@@ -1478,7 +1493,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 3,
     "duration_h": 5,
@@ -1572,7 +1588,8 @@
     "season": [
       "spring",
       "summer",
-      "autumn"
+      "autumn",
+      "winter"
     ],
     "budget": 2,
     "duration_h": 3,
