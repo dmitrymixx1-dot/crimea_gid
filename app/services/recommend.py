@@ -24,6 +24,20 @@ TAGS = {
     "romance": "для двоих",
 }
 
+# Бюджет: два числа у места вместо одной догадки. `price` — минимум, за
+# который место доступно (0 — вход свободный), `budget` — полоса самой
+# дорогой цены из `price_hint` (см. docs/data.md). Пороги те же, что в
+# подсказках квиза («до 1 000 ₽», «1 000–3 000 ₽»); тест сверяет числа
+# с текстом `quiz.json`, чтобы вопрос и матч-мейкер не разъехались.
+BUDGET_CEILING = {"economy": 1000, "comfort": 3000}
+BUDGET_PREMIUM_LEVEL = 3  # у премиума потолка нет — только вкус к дорогому
+REASON_TOO_PRICEY = "Дороже, чем ваш бюджет"
+REASON_PREMIUM = "Премиум-впечатление"
+REASON_CHILDREN = "Отличный вариант с детьми"
+REASON_RELAX = "Тихий и неспешный отдых"
+# Готовые фразы причин: их требует словарь локали (`test_reasons_are_translatable`).
+REASON_PHRASES = (REASON_TOO_PRICEY, REASON_PREMIUM, REASON_CHILDREN, REASON_RELAX)
+
 TAG_EMOJI = {
     "beach": "🏖️",
     "nature": "🌿",
@@ -264,20 +278,27 @@ def _score_attraction(a: dict, ans: dict) -> tuple[float, list[str]]:
         else:
             score -= 1.0
 
-    # 3) Бюджет.
-    budget_levels = {"economy": 1, "comfort": 2, "premium": 3}
-    budget = budget_levels.get(ans.get("budget", "comfort"), 2)
-    if a.get("budget", 2) <= budget:
-        score += 1.0
-    else:
+    # 3) Бюджет — по цене, а не по догадке. `price` — минимум, за который
+    #    место доступно: эконом платит за вход, поэтому место дороже его
+    #    потолка получает минус и причину. Премиум вход не ограничивает
+    #    и предпочитает места с дорогими впечатлениями (`budget` = 3) —
+    #    иначе ответ «премиум» ничего не менял: раньше таких мест было одно.
+    answer_budget = ans.get("budget", "comfort")
+    ceiling = BUDGET_CEILING.get(answer_budget)
+    if ceiling is not None and a.get("price", 0) > ceiling:
         score -= 2.0
-        reasons.append("Дороже, чем ваш бюджет")
+        reasons.append(REASON_TOO_PRICEY)
+    else:
+        score += 1.0
+    if answer_budget == "premium" and a.get("budget", 1) >= BUDGET_PREMIUM_LEVEL:
+        score += 1.0
+        reasons.append(REASON_PREMIUM)
 
     # 4) Состав компании.
     party = ans.get("party", "solo")
     if party == "family" and "family" in a["tags"]:
         score += 1.5
-        reasons.append("Отличный вариант с детьми")
+        reasons.append(REASON_CHILDREN)
     couple_tags = {"romance", "photo", "view"}
     if party == "couple" and couple_tags & set(a["tags"]):
         score += 1.0
@@ -297,7 +318,7 @@ def _score_attraction(a: dict, ans: dict) -> tuple[float, list[str]]:
         and ("beach" in a["tags"] or "spa" in a["tags"] or "nature" in a["tags"])
     ):
         score += 0.5
-        reasons.append("Тихий и неспешный отдых")
+        reasons.append(REASON_RELAX)
 
     # 6) Транспорт: без машины часть мест недоступна.
     if ans.get("transport", "car") == "transit" and a.get("access") == "car":

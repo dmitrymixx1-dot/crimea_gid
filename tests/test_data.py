@@ -4,6 +4,7 @@ from pathlib import Path
 from app.services.load import get_attractions, get_quiz, get_snapshot, get_sources
 from app.services.recommend import (
     AREA_LABEL,
+    BUDGET_CEILING,
     DAYS_BY_DURATION,
     ITINERARY_DAYS,
     PROFILES,
@@ -36,6 +37,7 @@ def test_attractions_schema():
         "budget",
         "duration_h",
         "rating",
+        "price",
         "price_hint",
         "tips",
         "access",
@@ -506,6 +508,79 @@ def test_price_hints_are_informative():
     for a in get_attractions():
         hint = a["price_hint"].lower()
         assert "₽" in hint or "бесплат" in hint, f"{a['id']}: {a['price_hint']}"
+
+
+# Цена и уровень бюджета — две машинные проекции одной человеческой строки,
+# как `schedule` для `hours`. Правило живёт в docs/data.md, а здесь оно
+# проверяется в обе стороны: поменяли подсказку, не тронув числа, — тест
+# показывает место. Раньше `budget` был оценкой редактора: 42 места из 60
+# стояли в «экономе», среди них билеты по 600 ₽, а уровень 3 был один —
+# и ответ «премиум» в квизе не менял ничего.
+PRICE_RE = re.compile(
+    r"(\d[\d\s\u00a0]*\d|\d)\s*(?:[–—]\s*(\d[\d\s\u00a0]*\d|\d)\s*)?₽"
+)
+
+
+def hinted_prices(hint: str) -> list[int]:
+    """Все цены из подсказки: «300–500 ₽» — это и 300, и 500."""
+    out: list[int] = []
+    for match in PRICE_RE.finditer(hint):
+        out.extend(int(re.sub(r"[\s\u00a0]", "", g)) for g in match.groups() if g)
+    return out
+
+
+def test_price_is_the_lowest_price_of_the_place():
+    """`price` — минимум, за который место доступно: 0, если в подсказке
+    есть бесплатный вариант, иначе самая низкая цена оттуда."""
+    for a in get_attractions():
+        nums = hinted_prices(a["price_hint"])
+        free = "бесплат" in a["price_hint"].lower()
+        assert nums or free, f"{a['id']}: в подсказке нет ни цены, ни «бесплатно»"
+        expected = 0 if free else min(nums)
+        assert isinstance(a["price"], int) and a["price"] >= 0, a["id"]
+        assert a["price"] == expected, (
+            f"{a['id']}: {a['price']} ≠ {expected} ({a['price_hint']})"
+        )
+
+
+def test_budget_level_follows_the_highest_price():
+    """`budget` — полоса самой дорогой цены из подсказки, по порогам квиза:
+    ≤1 000 ₽ → 1, ≤3 000 ₽ → 2, дороже → 3. Это «сколько место может
+    вместить», а не «сколько стоит прийти» (то — `price`)."""
+    for a in get_attractions():
+        nums = hinted_prices(a["price_hint"])
+        top = max(nums) if nums else 0
+        expected = 1 if top <= 1000 else (2 if top <= 3000 else 3)
+        assert a["budget"] == expected, (
+            f"{a['id']}: {a['budget']} ≠ {expected} ({a['price_hint']})"
+        )
+
+
+def test_budget_levels_use_the_whole_scale():
+    """Каждый уровень кому-то адресован: пустая полоса — это ответ квиза,
+    который ничего не решает."""
+    items = get_attractions()
+    for level in (1, 2, 3):
+        assert [a for a in items if a["budget"] == level], f"уровень {level} пуст"
+    assert len([a for a in items if a["budget"] == 3]) >= 3
+    # Потолок эконома обязан что-то отсекать, иначе он не потолок.
+    assert [a for a in items if a["price"] > BUDGET_CEILING["economy"]]
+
+
+def test_budget_thresholds_match_the_quiz():
+    """Числа в подсказках квиза — те же, что в баллах матч-мейкера."""
+    options = {
+        o["id"]: o.get("hint", "")
+        for q in get_quiz()["questions"]
+        if q["id"] == "budget"
+        for o in q["options"]
+    }
+    for answer, ceiling in BUDGET_CEILING.items():
+        text = re.sub(r"[\s\u00a0]+", " ", options[answer])
+        spelled = f"{ceiling:,}".replace(",", " ")
+        assert spelled in text, f"{answer}: порога {spelled} нет в «{options[answer]}»"
+    # «Премиум» — единственный ответ без потолка: числа в подсказке нет.
+    assert not re.search(r"\d", options["premium"])
 
 
 # Координаты сверены с OpenStreetMap/Википедией: якоря не дают «уплыть»

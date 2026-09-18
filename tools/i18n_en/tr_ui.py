@@ -506,6 +506,8 @@ EXTRA_LABELS = {
     "Отличное место осенью": "Excellent place in autumn",
     "Отличное место зимой": "Excellent place in winter",
     "Дороже, чем ваш бюджет": "Pricier than your budget",
+    # Премиум: место с дорогими впечатлениями — дайвинг, полёт, грязи.
+    "Премиум-впечатление": "A premium experience",
     "Отличный вариант с детьми": "Great option with children",
     "Тихий и неспешный отдых": "Quiet, unhurried pace",
     # модули фронта: rate-limit.js
