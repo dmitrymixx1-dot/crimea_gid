@@ -27,7 +27,7 @@ for f in static/*.js; do node --check "$f"; done   # синтаксис всех
 .venv/bin/ruff check app tests              # линтер
 ```
 
-**438 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
+**439 Python-тестов**, сеть не используется (все внешние вызовы заглушены),
 плюс **143 JS-тест** (`tests/js/`, `node:test` без зависимостей):
 
 | Модуль | Что покрывает |
@@ -196,12 +196,14 @@ GitHub Actions (`.github/workflows/ci.yml`), на push в `main`/`arena/**`
    `python tools/i18n_en/build.py` (новый префикс `CACHE` в `sw.js` сам
    сбросит оболочку у тех, кто уже её держит).
 3. Прогнать `ruff check`, `pytest`, `node --check` и `node --test`.
-4. Записать изменения в `CHANGELOG.md`, отметить пункты в `ROADMAP.md`.
+4. Записать изменения в `CHANGELOG.md`; закрытую фазу свернуть таблицей
+   в `docs/roadmap-archive.md`, а [ROADMAP.md](../ROADMAP.md) — ориентир,
+   он меняется, когда меняется направление, а не когда фаза закрыта.
 5. PR в `main`: CI обязан быть зелёным (test + docker build).
 6. Выкатить: `git pull && docker compose up -d --build` на сервере —
    подробности и бэкапы в [deploy.md](deploy.md). Если настроен
-   автодеплой, достаточно `git tag v1.11.0 && git push --tags`:
+   автодеплой, достаточно `git tag v1.13.0 && git push --tags`:
    workflow сам прогонит тесты, репетицию выката и выкатит релиз.
    До первого выката сценарий стоит проверить репетицией
-   (`./deploy/deploy.sh --dry-run v1.11.0`) или ручным запуском workflow
+   (`./deploy/deploy.sh --dry-run v1.13.0`) или ручным запуском workflow
    с `dry_run=true` — ни сервера, ни секретов для этого не нужно.

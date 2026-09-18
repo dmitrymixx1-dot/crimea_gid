@@ -248,6 +248,7 @@ PLACES = {
         "description": "A collection of Russian icons and Western European painting: Repin, Aivazovsky, Shishkin. The best museum on the peninsula. The exposition is arranged by schools and genres rather than chronology: the itinerant landscape painters hang next to the southern ones, the sea has its own room. In summer the museum is quiet — a fine refuge from the afternoon heat. The collection keeps growing through transfers and gifts, so on a repeat visit check the new-acquisitions rooms.",
         "tips": "Perfect in winter and spring: no crowds, warm inside.",
         "price_hint": "ticket ~450 ₽",
+        "hours": "10:00–18:00 (Tue–Sun), closed Mondays, last Friday of the month is a sanitation day",
     },
     "seva-miskor": {
         "name": "Aya cape and lighthouse",
@@ -429,6 +430,7 @@ PLACES = {
         "description": "The temple complex of the Crimean Karaites with marble courtyards and grape arbours — the core of the “Little Jerusalem” walking route. There are two kenasas — a summer one and a winter one: the community lived and prayed by the season. Inside there is no painting: carved arches, coloured glass and the Holy Book — the “religion of Scripture” reads in the very restraint of the interior. The kenasas are still in use: during prayers the tours stand still, phone on silent.",
         "tips": "In one hour you can see the kenesas, Juma-Dzhami mosque and the Gezslev gate nearby — the whole old town is five minutes away.",
         "price_hint": "kenasses entry ~300 ₽, the walking route is free",
+        "hours": "8:00–20:00 (May–September), 10:00–17:00 (October–April), Saturdays from 13:00",
     },
     "okunevka": {
         "name": "Okunivka: bay under the cliff",
