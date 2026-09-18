@@ -335,13 +335,14 @@ def python_labels() -> set[str]:
 
 
 def source_labels() -> set[str]:
-    """Вывески изданий: их печатает бейдж новости (`it.source` в app.js).
+    """Вывески и подписи изданий: их печатает лента и блок «Об источниках».
 
     Значения приходят из данных (`app/data/sources.json` и офлайн-снапшот),
     поэтому статика их не видит, а английский экран без перевода оставил бы
-    в ленте «РБК» и «Крым.Цифровой». Латинские вывески («News.ru») не
-    требуем: переводить там нечего, обходчик оставит их как есть. Сами
-    заголовки — чужой текст, их словарь не касается вовсе.
+    в ленте «РБК» и «Крым.Цифровой», а в подписях под ними — русские
+    строчки. Латинские вывески («News.ru») не требуем: переводить там
+    нечего, обходчик оставит их как есть. Сами заголовки — чужой текст,
+    их словарь не касается вовсе.
     """
     out: set[str] = set()
     for name in ("sources.json", "news_snapshot.json"):
@@ -357,6 +358,11 @@ def source_labels() -> set[str]:
                 continue
             raw = record.get("name") or record.get("source") or ""
             out.add(normalize(str(raw)))
+            # Подпись источника: `description` из sources.json видна
+            # в блоке «Об источниках» — значит, обязана иметь перевод.
+            desc = record.get("description")
+            if isinstance(desc, str):
+                out.add(normalize(desc))
     return {text for text in out if has_cyrillic(text)}
 
 

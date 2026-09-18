@@ -33,6 +33,11 @@
   "RSS-ленты недоступны из вашей сети — показываем кэш": "RSS feeds are unreachable from your network — showing the cache",
   "⏱ {h} ч": "⏱ {h} h",
   "Заголовки остаются русскими: чужие тексты мы не переводим, ссылка ведёт на источник.": "Headlines stay in Russian: we do not translate other publications' text — the link goes to the original.",
+  "не отвечает": "not responding",
+  "Открыть источник ↗": "Open the source ↗",
+  "Ленты: {rss} RSS и {tg} Telegram · опрос каждые {n} мин": "Feeds: {rss} RSS and {tg} Telegram · polled every {n} min",
+  "📡 Об источниках": "📡 About the sources",
+  "Сервер опрашивает ленты и кэширует их: заголовки — тексты изданий, ссылка ведёт на публикацию.": "The server polls the feeds and caches them: headlines are the publishers' own texts, and the link leads to the original.",
   "🌊 Море и купание": "🌊 Sea and swimming",
   "Данных о воде сейчас нет — морская модель недоступна. Попробуйте позже.": "There is no water data right now — the marine model is unavailable. Try again later.",
   "Самая тёплая вода —": "Warmest water:",
@@ -270,11 +275,14 @@
   "Комфорт": "Comfort",
   "Красивые фото": "Beautiful photos",
   "Крепость": "Fortress",
+  "Крупнейшее крымское новостное агентство": "The largest Crimean news agency",
   "Крым без лишних трат": "Crimea without overspending",
   "Крым всей семьёй": "Crimea with the whole family",
   "Крым для вас — это вкус: рынки, сыроварни, фермерские продукты и локальные специалитеты.": "For you Crimea is taste: markets, cheese dairies, farm produce and local specialities.",
   "Крым на адреналине": "Crimea on adrenaline",
   "Крым.Цифровой": "Crimea.Digital",
+  "Крымская редакция РИА Новости: события полуострова": "RIA Novosti Crimea desk: peninsular events",
+  "Крымский региональный портал": "Crimean regional portal",
   "Культура и музеи": "Culture and museums",
   "Культурный маршрут": "A cultural route",
   "Купание, загар, прогулки у воды": "Swimming, sunbathing, walks by the water",
@@ -291,6 +299,9 @@
   "Музей": "Museum",
   "На одного человека в день": "per person per day",
   "На своей машине": "By your own car",
+  "Новости экономики и общества": "Business and society news",
+  "Новостной портал Севастополя": "Sevastopol news portal",
+  "Общие новости дня": "General daily news",
   "Один(а)": "Solo",
   "Определим, сколько мест показать в подборке": "This sets how many places we show",
   "Осень (сентябрь–ноябрь)": "Autumn (September–November)",
@@ -310,6 +321,10 @@
   "Природа": "Nature",
   "Природа и hiking": "Nature and hiking",
   "Пт": "Fri",
+  "Публичное превью телеграм-канала (парсится без ключа)": "Public preview of the Telegram channel (parsed without a key)",
+  "Публичное превью телеграм-канала News.ru": "Public preview of the News.ru Telegram channel",
+  "Публичное превью телеграм-канала РБК": "Public preview of the RBC Telegram channel",
+  "Публичное превью телеграм-канала РИА Новости Крым": "Public preview of the RIA Novosti Crimea Telegram channel",
   "Путешествие для двоих": "A trip for two",
   "РБК": "RBC",
   "РБК · TG": "RBC · TG",
@@ -330,6 +345,7 @@
   "Средний": "Moderate",
   "ТАСС": "TASS",
   "Ущелья, плато, заповедники": "Gorges, plateaus, reserves",
+  "Федеральное новостное агентство": "Federal news agency",
   "Форпост Севастополь": "Fortpost Sevastopol",
   "Художник-путешественник": "The travelling artist",
   "Центральный Крым": "Central Crimea",
@@ -455,7 +471,7 @@
   "lastochino": {
    "name": "Swallow's Nest",
    "region": "Yalta · Ai-Todor cape",
-   "description": "The most recognisable castle in Crimea: a neo-Gothic villa perched on a sheer cliff above the sea. People come for the sunset — there is no better spot for it.",
+   "description": "The most recognisable castle in Crimea: a neo-Gothic villa perched on a sheer cliff above the sea. Come for the sunset — there is no better spot. The castle went up at the turn of the 20th century; after the great earthquake its walls were braced with a metal frame, which is why it still hangs on the forty-metre cliff. Inside is a small exhibition worth a quarter of an hour — people come here for the view and the photograph.",
    "tips": "Arrive an hour before sunset: the cliff first, then the castle lit up.",
    "price_hint": "castle ticket ~500 ₽, the cliff and the view are free",
    "hours": "10:00–19:00 (May–October), 10:00–16:00 (November–April), closed Mondays in winter"
@@ -463,7 +479,7 @@
   "massandra": {
    "name": "Massandra Palace Complex",
    "region": "Yalta · Massandra",
-   "description": "A romantic palace by the sea, a willow park with fountains and the famous wine cellars holding a collection of 1.2 million bottles.",
+   "description": "A romantic palace by the sea, a willow park with fountains and the famous wine cellars holding a collection of 1.2 million bottles. The palace was begun as a country retreat for Alexander III and finished for his son: “royal style” here means restraint — oak, coffered ceilings, vineyards outside every window. The cellars are a separate programme: collection bottles never leave the vaults, and tastings run in the old tasting hall.",
    "tips": "The “Massandra” tasting is a must; book the cellar tickets in advance.",
    "price_hint": "palace ~600 ₽, cellars plus tasting from 800 ₽",
    "hours": "9:00–19:00 (July – 14 September), 9:00–18:00 (April–June, 15 September–October), 9:00–17:00 (November–March); the box office closes 45 minutes earlier"
@@ -471,7 +487,7 @@
   "nikitsky": {
    "name": "Nikitsky Botanical Garden",
    "region": "Yalta · Nikita",
-   "description": "400 hectares of subtropics by the sea: 18,000 plant species, famous magnolias, tea terraces and nurseries. Blossom in spring, vineyards in autumn.",
+   "description": "400 hectares of subtropics by the sea: 18,000 plant species, famous magnolias, tea terraces and nurseries. Blossom in spring, vineyards in autumn. Founded in 1812, the garden is still a laboratory of subtropical acclimatisation: collections are arranged by “zones of the Earth”, not by beauty, so cypresses stand next to cedars. The grounds are huge: even the short loop takes half a day, and some nurseries are ticketed separately.",
    "tips": "Head for the mountain sector — quieter and more beautiful there. In summer come after 16:00.",
    "price_hint": "ticket ~600 ₽, the tea terrace is included",
    "hours": "9:00–18:00, until 20:00 in summer, until 16:00 in winter; the box office closes an hour earlier"
@@ -479,7 +495,7 @@
   "livadia": {
    "name": "Livadia Palace",
    "region": "Yalta · Livadia",
-   "description": "The imperial residence in Neo-Norman style with a park by the sea, a botanical corner and wine cellars. The place where the “Big Three” met in 1945.",
+   "description": "The imperial residence in Neo-Norman style with a park by the sea, a botanical corner and wine cellars. The place where the “Big Three” met in 1945. The white palace replaced the outgrown old manor at the start of the 20th century. The main exhibit is the conference itself: the round table stands in the state hall. Park terraces step down to the sea; from the upper platforms the coast runs all the way to Foros.",
    "tips": "The park is open access — you can walk it even without a palace ticket.",
    "price_hint": "palace ~600 ₽, the park is free",
    "hours": "10:00–19:00 (16 June – 15 October), 10:00–18:00 (May – 15 June), 10:00–17:00 (November–April); closed on the last Wednesday of the month from October to May"
@@ -487,7 +503,7 @@
   "vorontsov": {
    "name": "Vorontsov Palace",
    "region": "Yalta · Alupka",
-   "description": "A 19th-century Gothic castle on the plateau above the Koksoakka river. Inside: interiors and a Crimean Tatar life collection; around it, a park full of cypresses.",
+   "description": "A 19th-century Gothic castle on the plateau above the Koksoakka river. Inside: interiors and a Crimean Tatar life collection; around it, a park full of cypresses. The palace was built for Prince Vorontsov over nearly two decades, working from English Gothic pattern books — the façade is romantic, not historical. Beyond the state rooms, remember the monkeys on the chimneys and the slim palace chapel. The park terraces slope to the sea: you will walk it longer than you will study all the exhibits.",
    "tips": "Go to the viewpoint by the gates — the best view of the river in the area.",
    "price_hint": "ticket ~550 ₽",
    "hours": "9:00–18:00 (April–June, 16 September–October), 8:00–20:00 (July – 15 September), 9:00–17:00 (November–March); the box office closes 45 minutes earlier"
@@ -495,7 +511,7 @@
   "hersonesus": {
    "name": "Chersonesus Taurica",
    "region": "Sevastopol",
-   "description": "An open-air city-museum: a Greek colony of the 3rd century BC, Byzantine basilicas, a fortress. UNESCO-listed, 2,500 years of history.",
+   "description": "An open-air city-museum: a Greek colony of the 3rd century BC, Byzantine basilicas, a fortress. UNESCO-listed, 2,500 years of history. The polis stood here for over seventeen centuries: the agora, towers, water mains and burials are excavated layer by layer, mosaics lie right under your feet. The field is open and windy — take a hat and water in summer and come at opening time: by noon the basilicas are swarming with tours.",
    "tips": "Start with the basilicas — the meme-famous part, with frescoes under your feet.",
    "price_hint": "ticket ~450 ₽, audio guide included",
    "hours": "grounds 9:00–19:00 (until 18:00 in winter), visitors admitted until 18:30"
@@ -503,7 +519,7 @@
   "khan": {
    "name": "Khan's Palace",
    "region": "Bakhchisaray",
-   "description": "Residence of the Crimean khans with 300 years of history. Famous for the Fountain of Tears — the one Pushkin described in “The Fountain of Bakhchisaray”.",
+   "description": "Residence of the Crimean khans with 300 years of history. Famous for the Fountain of Tears — the one Pushkin described in “The Fountain of Bakhchisaray”. The palace is a set of courtyards, halls and gardens assembled over centuries: the Divan, the khans' mausoleums and that very fountain with a pre-Pushkin biography. The courtyards stay cool and shaded even at noon — drink tea with mountain herbs here; the bazaar noise picks you up right beyond the gate.",
    "tips": "Take a guided tour: without a guide the palace does not read.",
    "price_hint": "ticket ~400 ₽",
    "hours": "9:00–18:00 (April–October), 9:00–17:00 (November–March), the box office closes an hour earlier; occasional Mon/Tue closures out of season"
@@ -511,28 +527,28 @@
   "foros": {
    "name": "Foros Monastery and Church",
    "region": "Yalta · Foros",
-   "description": "A 15th-century cave monastery and the Saviour Church on a cliff above the sea. The view of the small church from the path is a Crimea postcard.",
+   "description": "A cave monastery of the 15th century and the Church of the Saviour on a cliff above the sea. The view of the little church from the path is a Crimean postcard classic. The church was rebuilt in the 19th century as a memorial of gratitude for the emperor's rescue; the cave monastery is far older — cells and altars carved straight into the rock. The climb up the ravine is a breathing workout: the last third goes nearly vertical, but up top there is the church and the whole coast laid out below.",
    "tips": "Climb the switchbacks in shoes with a sole. It may close on windy days.",
    "price_hint": "free, the paths are free"
   },
   "aipetri": {
    "name": "Ai-Petri: cable car and plateau",
    "region": "Yalta → Ai-Petri, 1,234 m",
-   "description": "A 7-minute cable-car climb to the plateau above the south coast: a 100 km panorama, the Tree of Life cave, ruins of a medieval monastery.",
+   "description": "A seven-minute cable-car climb to the plateau over the southern coast: a 100-km panorama, the Tree of Life cave, ruins of a medieval monastery. The carriage rises without an intermediate station: seven minutes — and instead of sea level you are almost a kilometre above it. The plateau is karst: famous sharp “teeth” at the rim, wind at any time of year. Cafes sit by the upper station and the cave descent, but put a jacket in the backpack: the height is markedly colder than the shore.",
    "tips": "The cable car closes in wind — check before you go. In winter there are sledges.",
    "price_hint": "cable car ~1,000 ₽ return"
   },
   "demerdji": {
    "name": "Demerdji Mountain and cable car",
    "region": "Alushta · Demerdji",
-   "description": "One of the largest cableway climbs in Europe (2,544 m), a plateau with rock grottoes and the famous “Potok” waterfall.",
+   "description": "One of Europe's largest cableway climbs (2,544 m), a plateau with rock grottoes and the famous “Stream” waterfall. The mountain's name is usually translated as “coppersmith”: old mine workings in the flank, and on sunny days the tailings glow rust-red. From the upper station two routes diverge: along the ridge to the rocks, or down the gorge to the waterfall — both take over an hour but need no gear. The plateau has neither shade nor water: start in the morning and plan a litre per person.",
    "tips": "It is cool at the top even in summer — take a jacket.",
    "price_hint": "cable car ~900 ₽ return"
   },
   "marble": {
    "name": "Marble Cave",
    "region": "Simferopol · Chatyrdah",
-   "description": "A unique cave with “marble” stalactites and stalagmites and galleries up to 40 m. The water inside is warm — 14 °C.",
+   "description": "A unique cave with “marble” stalactites and stalagmites and galleries up to 40 m. The water inside is warm — 14 °C. The cave was found by chance in the 1970s and immediately fitted with paths and lighting — hence the museum-clean halls. The tour is a one-way loop of about a kilometre, no shortcuts: the lower gallery is colder and wetter, and the exit leads to the Ak-Kaya cliff above the steppe. A jacket is mandatory in any season: fourteen degrees is fourteen degrees.",
    "tips": "Only with a guided tour. No flash photos, but the hall lighting is beautiful.",
    "price_hint": "tour ~600–800 ₽",
    "hours": "9:00–19:00, entry only on a guided tour — groups form up to 45 minutes"
@@ -540,7 +556,7 @@
   "kalos-limen": {
    "name": "Kalos Limen: the Fair Harbour",
    "region": "Chernomorskoye · Kalos Limen",
-   "description": "An ancient Greek settlement of the 4th century BC right on the Black Sea shore: fortress walls, towers and a museum of the digs against a bay backdrop.",
+   "description": "An ancient Greek settlement of the 4th century BC right on the Black Sea shore: city walls, towers and a museum of the digs against the bay. The colony was founded by emigres from Heraclea: a winery, towers and a paved street have survived on the shore — the sea is now a couple of steps from the site. The pavilion is small, the main thing is outdoors: go to the ruins in the morning, keep the sea for the afternoon. There is no water or shade at the dig — bring your own.",
    "tips": "Combine it with the Chernomorskoye embankment — the ruins are 10 minutes from the beach.",
    "price_hint": "reserve museum ~300 ₽",
    "hours": "10:00–18:00 (June–September), 9:00–17:00 (October–May), open every day"
@@ -548,28 +564,28 @@
   "djangul": {
    "name": "Dzhankhul: the landslide coast",
    "region": "Chernomorskoye · Dzhankhul",
-   "description": "A protected stretch of Tarkhankut: a chaos of limestone blocks, landslide terraces, rocks tumbling into the water and almost no people.",
+   "description": "A protected stretch of Tarkhankut: a chaos of limestone slabs, landslide terraces, stone fields by the water and almost no people. The coast here is alive: the slabs have been sliding into the sea for centuries, and the shore looks like a giant's building materials abandoned mid-construction. The path runs along the cliff top — no shade, no shop within a kilometre. In a storm the post-apocalypse turns dangerous: the slabs get slippery — leave before the wind rises.",
    "tips": "The path along the cliff has no shade and no shops: water, grippy shoes, a windbreaker.",
    "price_hint": "free"
   },
   "koktebel": {
    "name": "Koktebel and Kok-Armagun cape",
    "region": "Koktebel",
-   "description": "A dacha town in a mountain valley with the longest sand beach on the peninsula, the Gaydarov house-museum and a winery under the hill.",
+   "description": "A dacha town in a mountain valley with the peninsula's longest sand beach, the Gaydarovich house-museum and the winery below the hill. Voloshin's house sits on the slope: the poet's rooms, his own paintings, and the neighbouring hill — his grave and a viewpoint over the whole bay. The beach is coarse sand with pebbles and drops off fast; afternoon wind usually builds up — it is on exactly such flows that the wings of Klementyev fly.",
    "tips": "In the evening, a tasting at the Koktebel winery; sunset from the beach.",
    "price_hint": "beach ~300–500 ₽"
   },
   "new-light": {
    "name": "Novy Svet: the Black Rock",
    "region": "Sudak · Novy Svet",
-   "description": "A rocky shore with the Black Rock, the Moon Valley and a fishing village. The sea is clean here and the cliffs look like a wild Mediterranean.",
+   "description": "A rocky shore with the Black Cliff, the Lunar Valley and a fishing village. The sea is clear here and the cliffs look like the wild Mediterranean. The town was founded by Prince Golitsyn, who planted the vineyards and built one of the country's first sparkling-wine plants. The Golitsyn Trail loops the mountain in a couple of hours: one by one, the Blue, Green and Tsar's bays open through the rocks, each with its own colour of water. Go in the morning: by noon the shore fills with groups, and the trail has no shade.",
    "tips": "The walk to the Black Rock takes 40 minutes from the centre. The water is crystal clear.",
    "price_hint": "free"
   },
   "sudak": {
    "name": "Gothic Fortress in Sudak",
    "region": "Sudak",
-   "description": "A 15th-century fortress above Sudak Bay — the only surviving fortress of the Livonian Order knights in Crimea. From the towers you see the whole bay.",
+   "description": "A 15th-century fortress over Sudak Bay — the only surviving western-knight stronghold in Crimea. The towers overlook the whole bay. The Genoese raised the citadel, towers and outer walls — line after line, stronger the higher you go. The exhibits stand under the open sky, there is no shade, the stone heats up in summer — a hat is mandatory. From the upper ridge, on a clear day, you can see Ai-Petri and the coast all the way to Novy Svet.",
    "tips": "You can swim right next to it — the beach is at the fortress entrance. In summer there is nowhere to hide from the sun.",
    "price_hint": "ticket ~350 ₽",
    "hours": "8:00–20:00 (May–August), 9:00–19:00 (April, September), 9:00–18:00 (October–November, February–March), 9:00–17:00 (December–January); the box office closes an hour earlier"
@@ -577,42 +593,42 @@
   "feodosia": {
    "name": "Feodosia: embankment and the Art Museum",
    "region": "Feodosia",
-   "description": "The oldest town in Crimea with the longest sand beach — “Zolotyye Peski”, 18 km. The museum holds “The Storm” by Giorgione, a Renaissance masterpiece.",
+   "description": "The oldest city in Crimea with the 18-km Golden Sands beach. In the museum — Giorgione's “Storm”, a Renaissance masterpiece. The city is as old as Theodosia itself: Genoese defence lines read through the old town, merchant mansions along the boulevard. Ayvazovsky lived and is buried here: his gallery and his house-museum are the two main addresses of the city, a few minutes' walk apart.",
    "tips": "The embankment is a 3 km promenade with a view of the sea and the Snake cape.",
    "price_hint": "museum ~500 ₽, part of the beach is free"
   },
   "kerch": {
    "name": "Kerch: Panticapaeum and the embankment",
    "region": "Kerch",
-   "description": "A town by the strait: antique Panticapaeum, the Mithridates monument, a fortress and viewpoints over the Kerch Strait. The local cuisine has the best fish on the peninsula.",
+   "description": "A city by the strait: ancient Panticapaeum, Mithridat mountain, a fortress, viewpoints over the Kerch Strait. The local cuisine — the best fish on the peninsula. Panticapaeum was the capital of the Bosporan Kingdom, and its acropolis is the summit of Mount Mithridat, reached by the famous Great Staircase and the obelisk. From the top, on a clear day, you see both seas — Black and Azov — and the Caucasus ridge blue beyond the strait. Add the underground quarries and the fortress row: Kerch will fill a day.",
    "tips": "Dinner on the embankment: red mullet and local wines. At sunset, walk to the ferry in the port.",
    "price_hint": "museums 300–500 ₽ each"
   },
   "old-crimea": {
    "name": "Old Crimea Fortress",
    "region": "Staryy Krym",
-   "description": "A 15th-century citadel in the historic centre: towers, gates, cave dungeons with frescoes. A minaret and a mosque nearby.",
+   "description": "A 15th-century citadel in the historic centre: towers, gates, cave dungeons with frescoes. Nearby, a minaret and a mosque. The town was the capital of a Horde ulug and then an Ottoman sanjak; now it is a small museum town where fortress walls and an Armenian mountain monastery stand side by side. Alexander Grin was born here, and his father's house is now the museum. The climb to the monastery takes half an hour — worth it for the steppe view and the mountain ridge on the horizon.",
    "tips": "Combine it with Marble Cave — 40 minutes in a straight line.",
    "price_hint": "ticket ~300 ₽"
   },
   "evpatoria": {
    "name": "Yevpatoria: beaches and salt lakes",
    "region": "Yevpatoria",
-   "description": "A swimming resort with a gently shelving bottom (the water stays shallow for 2–3 km) — the best beach for children, next to the Sasyk salt lakes.",
+   "description": "A swimming resort with a gently shelving bottom (knee-deep water for 2–3 km) — the best beach for children. Neighbouring the Sasyk salt lakes. The old town is walked along the “Little Jerusalem” route: kenasas, the Juma-Jami mosque, the Karaulatan Gates (Gezlev) and the caravanserai — quarters of different communities stood shoulder to shoulder for centuries. The main resource is the sea: flat shelf, warm early, sand underfoot forgives unsteady legs. In the evening the embankment turns pedestrian: musicians, carousels, lights over the water.",
    "tips": "With kids, come only here: shallow water, a wide embankment, room for a pram.",
    "price_hint": "beach ~200–400 ₽"
   },
   "saki": {
    "name": "Saki: mud lakes and spa",
    "region": "Saki",
-   "description": "A resort of mud and salts: natural mud volcanoes, a salt lake, balneology programmes. The “Fountain of Youth” is nearby.",
+   "description": "A resort of mud and salts: natural mud volcanoes, a salt lake, balneology programmes. Next door — the “Fountain of Youth”. The resort is about two hundred years old: medical silt from the bottom of the salt lake is still delivered straight to the mud baths, and a park with springs was laid out around them. The pebble beach does not compete with the southern coast: people come to Saki for the mud and the calm, not for the waves.",
    "tips": "Try the mud in season — in summer the lakes “ripen”.",
    "price_hint": "special programmes 2,000–5,000 ₽"
   },
   "alushta": {
    "name": "Alushta: Bear Corner park and the aquarium",
    "region": "Alushta",
-   "description": "A resort where the mountains meet the sea: a famous sea aquarium, an embankment, a water park. From the Black Rock ridge you see the whole Southern Coast.",
+   "description": "A resort where mountains meet the sea: the famous sea aquarium, an embankment, a water park. From the Black Cliff massif — a view over the southern coast. The town stretches between the mouths of two mountain rivers, and the road to the Demerdji cableway starts right here. The embankment is long and lively in the evening, and Ai-Petri, the canyon and the waterfall are close at hand: Alushta is valued as a “sea plus mountains” base. The beaches are wide with a soft entry: crowded near the hotels in high season, but free stretches always have room.",
    "tips": "In the evening, stroll the embankment — 4 km each way.",
    "price_hint": "aquarium ~600 ₽, beach ~300 ₽",
    "hours": "aquarium 9:00–21:00 (May–October), 9:00–19:00 (November–April); the box office closes an hour earlier"
@@ -620,70 +636,70 @@
   "oreanda": {
    "name": "Oreanda: the courtyard and embankment",
    "region": "Yalta · Oreanda",
-   "description": "A historic resort with a courtyard (now “Crimea”), a park with fountains and the most photogenic embankment on the Southern Coast.",
+   "description": "A historic resort with a park of fountains and the most photogenic promenade of the southern coast. The old manor Oreanda did not survive: the buildings are Soviet-era, but the park terraces keep their historical layout. Steps cut into the rock connect the embankment with the upper town: that is the balcony over Yalta Bay, where the air tastes like mineral water. The beach is down the stairs from the park; shade is scarce after noon.",
    "tips": "The fountains run at 10:00, 12:00 and 18:00 — catch the moment.",
    "price_hint": "park ~400 ₽, the beach is paid"
   },
   "gurzuf": {
    "name": "Gurzuf: Yubileyny park and embankment",
    "region": "Gurzuf",
-   "description": "The greenest and quietest corner of the Southern Coast: a park with fountains, an oak grove, clean beaches under the mountains. The sea here is cleaner than in Yalta.",
+   "description": "The greenest and quietest corner of the southern coast: a park with fountains, an oak grove, clean beaches under the mountains. The sea is clearer here than in Yalta. Pushkin landed on this shore — a stone marks the landing; Chekhov loved the bay from his dacha, and the house is now a museum. The promenade runs along the water towards the Artek grounds; the pebble beaches stay transparent even in the heat. And above the bay, on the hill — ruins of a Genoese fortress: a viewpoint and the evening shot.",
    "tips": "Walk along the shore towards Koktebel — a path along the cape, 2 km on foot.",
    "price_hint": "park ~350 ₽, beach ~300 ₽"
   },
   "miskhor": {
    "name": "Miskhor: park, lighthouse and aquarium",
    "region": "Yalta · Miskhor",
-   "description": "A resort with a park, a lighthouse on a cliff and one of the oldest aquariums in Europe. The view from the lighthouse over Yalta Bay is in the top three panoramas.",
+   "description": "A resort with a park, a lighthouse on the cliff and one of the oldest aquariums in Europe. The view from the lighthouse over Yalta Bay ranks in the top three panoramas. The park was laid out at the turn of the 18th–19th centuries, its paths come right to the water. One of its symbols is the bronze “Beauty”: for over a century the legend has told every bride and groom to come to her — then the marriage holds. The lighthouse is small, but its evening lighting honestly competes with the sunset.",
    "tips": "The lighthouse on the cliff is a 5-minute walk from the park. The sunset from there is the best.",
    "price_hint": "aquarium ~500 ₽, lighthouse ~300 ₽"
   },
   "seva-bay": {
    "name": "Sevastopol: the bay, Navarinsky and S-13",
    "region": "Sevastopol",
-   "description": "A sea fortress: 35 km of embankments, panorama points, the S-13 submarine museum, historic batteries and a “Hero City”.",
+   "description": "A naval fortress: 35 km of embankments, panorama decks, the S-13 submarine museum, historic gun batteries and the “Hero City” title. The city lives by the memory of two defences: the Panorama stands on the Fourth Bastion, the Malakhov Kurgan keeps its guns under the open sky. The evening centre is a pedestrian embankment, and boats cross to the far side: from the quay to the submarine museum is a ten-minute walk.",
    "tips": "Plan: Chersonesus → Navarinsky (the view) → S-13 → embankment. A day is enough.",
    "price_hint": "Navarinsky ~500 ₽, S-13 ~300 ₽"
   },
   "bakhchisaray": {
    "name": "Old Bakhchisaray",
    "region": "Bakhchisaray",
-   "description": "The old capital of Crimea: mosques, hamams, narrow lanes and a bazaar with local cheeses, nuts and honey. A cosy “Turkish” quarter.",
+   "description": "The old capital of Crimea: mosques, hamams, narrow lanes and a bazaar with local cheeses, nuts and honey. A cosy “Turkish” quarter. The name means “garden palace”, and water really runs through the walls here: springs and carved gutters cross the courtyards of old mahallas. Above the town stands the Dormition monastery in the cliff: a steep path through the gorge leads to it from the palace. Walk the maze of lanes, not just the parade street: Crimean Tatar houses, courtyard chinaberry trees and the smell of yantyky from the coffee houses — that is the real town.",
    "tips": "Buy at the bazaar: suluguni, honey, walnuts. The hamam is a local one.",
    "price_hint": "free, hamam from 1,500 ₽"
   },
   "laspi": {
    "name": "Laspi: Skazka park and beaches",
    "region": "Sevastopol · Laspi",
-   "description": "A family resort 30 minutes from Simferopol: 6 km of beaches, the Skazka amusement park, a water park and a dolphinarium.",
+   "description": "A family resort 30 minutes from Simferopol: 6 km of beaches, the “Fairy Tale” amusement park, a water park and a dolphinarium. The beach half of Laspi is compact: embankment, park, a couple of streets — impossible to get lost from the hotel. The entry into the water is soft, and on a clear day the line of mountains by the shore sticks in your memory. For the big programme take a car: Foros, Balaklava and Sevastopol are within half a day.",
    "tips": "The default choice with children. For a weekend: Skazka plus the dolphinarium.",
    "price_hint": "park ~1,500 ₽, beach ~300 ₽"
   },
   "fontan": {
    "name": "“Fountain of Youth” in Saki",
    "region": "Saki",
-   "description": "A legendary spring with warm water (+42 °C), a bamboo grove and pools. Locals come for the invigorating contrast.",
+   "description": "A legendary spring of warm water (+42 °C) with a bamboo grove and baptismal pools. Locals come for the bracing contrast. The “Fountain” was described back in the age of the first Saki mud baths: the warm spring was considered the procedures' companion, and the order has not changed — mud first, water after. The pools are open-air and the water is hot: locals arrive before dawn, when there is no queue and steam hangs over the water.",
    "tips": "The water is hot — step into the pool carefully. The Sasyk salt lake is nearby.",
    "price_hint": "free, pools ~200 ₽"
   },
   "karadag": {
    "name": "Kara-Dag reserve",
    "region": "Feodosia · Kurortne",
-   "description": "A wild plateau above the steppe: salt lakes with pelicans, eagles and “red” flamingos. There is a local ornithological station.",
+   "description": "A wild plateau above the sea: salt lakes with pelicans and “red” flamingos, a local ornithological station. The massif is an extinct volcano: the crater is visible from the Feodosia side, and the shore below looks frankly Martian. The reserve is visited on excursion routes only — there is no other way in: off the trails are nesting colonies and rare plants. In the steppe at noon there is no cover: go in the morning, when the birds are up and the light is honest.",
    "tips": "In autumn there are migrating birds: gulls, pelicans, flamingos. Early morning is best.",
    "price_hint": "free, excursions ~500 ₽"
   },
   "koktel-winery": {
    "name": "Koktebel winery",
    "region": "Koktebel",
-   "description": "The classic of Crimean wine: muscats, “Kogol” and “Balk”. A tasting with a view of the bay is a mandatory stop on a food route.",
+   "description": "A classic of Crimean wine: muscats, “Kogol”, “Balk”. A tasting above the bay is a mandatory stop of any gastro route. The tradition was started here by Eduard Sandweg in the 1880s: his brandies and dessert wines once took the Grand Prix at a world expo. The cellars keep oak on the flank of Klementyev; the tour opens the ageing halls and a small museum of the founder. Book in advance: in high season the queue by the barrels is longer than the tasting itself.",
    "tips": "Order “Kogol” with your dessert at a local tavern.",
    "price_hint": "tasting ~700–1,000 ₽"
   },
   "inkerman": {
    "name": "Inkerman Wine Factory",
    "region": "Sevastopol · Inkerman",
-   "description": "One of the largest wineries in Crimea: ageing in the galleries of former quarries (55 thousand m² at a constant temperature) and tastings next to the Inkerman monastery.",
+   "description": "One of the largest wineries in Crimea: ageing in the galleries of former quarries (55 thousand square metres at constant temperature) and tastings next to the Inkerman monastery. The cellars are galleries of an old limestone quarry: stone from here once clad Chersonesus and old Sevastopol. The rock itself holds the temperature and humidity — the technology is simple: long patience and a barrel. After the tour it is a ten-minute walk to the cave monastery, and the river below its cliffs is prettiest in the evening.",
    "tips": "It is +14 °C in the cellars all year: take a sweater even in August.",
    "price_hint": "tour with tasting from 900 ₽",
    "hours": "tours at 10:00, 13:00 and 15:00 (14:30 on Friday), booking at the brand shop"
@@ -691,70 +707,70 @@
   "trip-trentyakov": {
    "name": "Tretyakov Gallery (branch)",
    "region": "Simferopol",
-   "description": "A collection of Russian icons and Western European painting: Repin, Aivazovsky, Shishkin. The best museum on the peninsula.",
+   "description": "A collection of Russian icons and Western European painting: Repin, Aivazovsky, Shishkin. The best museum on the peninsula. The exposition is arranged by schools and genres rather than chronology: the itinerant landscape painters hang next to the southern ones, the sea has its own room. In summer the museum is quiet — a fine refuge from the afternoon heat. The collection keeps growing through transfers and gifts, so on a repeat visit check the new-acquisitions rooms.",
    "tips": "Perfect in winter and spring: no crowds, warm inside.",
    "price_hint": "ticket ~450 ₽"
   },
   "seva-miskor": {
    "name": "Aya cape and lighthouse",
    "region": "Sevastopol · Aya cape",
-   "description": "A wild coast with rock grottoes, the “Eagle” trail and viewpoints. The water is clean and there are few tourists. A 19th-century lighthouse on the cape.",
+   "description": "A wild coast with sea caves, the “Eagle” path and viewpoints. Clear water, few tourists, a 19th-century lighthouse on the cape. The cape is an ancient coral reef: along the path you meet limestone with coral imprints, and the coves under the cliffs stay clear and quiet even in high season. Half a day is enough for the ridge crossing; the descent to the wild beach goes through a juniper grove and smells of resin all the way to the water. The lighthouse is a secured facility — admire it from outside.",
    "tips": "The Eagle trail walk takes 1.5 hours. Shoes with a sole!",
    "price_hint": "free"
   },
   "kuchugor": {
    "name": "Kapsyak Cape and wild beaches",
    "region": "Sudak · Novy Svet",
-   "description": "Bold rocks, wild beaches with small pebbles and an abandoned lighthouse. The local “Gibraltar” — with a view of the Syvash from the cape.",
+   "description": "Bold rocks, wild beaches with small pebble and an abandoned lighthouse. The local “Gibraltar” — with a view from the cape towards the Sivash. The approach is by a dirt road from the village: no shade, no water, but hollows between the rocks shelter you from the wind. People come less to swim — the ground underfoot is prickly — than for the light: at sunset the sea here turns copper.",
    "tips": "The water here is shallow — not the place for swimming, but perfect for photos.",
    "price_hint": "free"
   },
   "atlesh": {
    "name": "Atlesh: Great, Small and the Bay of Wonders",
    "region": "Chernomorskoye · Atlesh",
-   "description": "White rocks with a natural arch, a through grotto and the Bay of Wonders — the most postcard-like part of Tarkhankut and the main dive spot of western Crimea.",
+   "description": "White cliffs with a natural arch, a through grotto and the Wonder Harbour — the most “postcard” part of Tarkhankut and the main dive spot of western Crimea. The underwater wall starts right off Big Atlesh, which is why divers come here rather than snorkellers: visibility runs to tens of metres. The Small lake is reached by walking around on top or wading across in calm water: the lagoon is warmer than the sea, and the salt shelf is hot at noon. Bring your own water and shade: the steppe around goes on for kilometres.",
    "tips": "Go down to the water by the path near Great Atlesh; do not approach the grotto in a storm.",
    "price_hint": "free, diving from 3,500 ₽"
   },
   "balaklava": {
    "name": "Balaklava: embankment and Chembalo",
    "region": "Sevastopol · Balaklava",
-   "description": "A narrow fjord-like bay, Genoese towers of Chembalo on the hill and an embankment with fish restaurants. Boats to the Fiolent beaches and Zolotoy leave from here.",
+   "description": "A narrow fjord-like bay, the Genoese towers of Chembalo above and an embankment of fish restaurants. Boats to the Fiolent and Zolotoy beaches leave from here. In Soviet times the bay was closed: a submarine base was cut inside the mountain, and now there is a museum in the galleries. In the morning fishing boats come to the quay, and the catch goes straight from the cutter to the embankment grill. After lunch the bay fills with wind and the boats start rocking: if you dislike that, choose the first half of the day.",
    "tips": "Climb to the Chembalo towers at sunset — the view over the bay beats any postcard.",
    "price_hint": "embankment free, Chembalo ~200 ₽, boat from 500 ₽"
   },
   "fiolent": {
    "name": "Fiolent cape and St George Monastery",
    "region": "Sevastopol · Fiolent",
-   "description": "Volcanic rocks of jasper and agate, 300 m cliffs and the Jasper Beach, reached by 800 steps from St George Monastery.",
+   "description": "Volcanic cliffs of jasper and agate, 300-metre drops, and the Jasper Beach reached by 800 steps from St George's monastery. By tradition the monastery was founded in the 9th century by exiled Greeks, and the cove under the cape is called “Ovid's” — as if the banished poet stepped ashore there. Ovid or not, the cove is lovely: pebble and clear water. The coves beyond the monastery — the Second and the Third — are quieter, but the descent to them is not marked.",
    "tips": "Go down in the morning: climbing the steps in the noon heat is hard.",
    "price_hint": "free"
   },
   "grand-canyon": {
    "name": "Great Canyon of Crimea",
    "region": "Bakhchisaray · Sokoline",
-   "description": "A gorge up to 320 m deep on the northern slope of Ai-Petri: the Auzyun-Uzen river, cascades, the “Bath of Youth” and a relic yew grove.",
+   "description": "A gorge up to 320 m deep on the northern slope of Ai-Petri: the Auozun-Uzen river, cascades, the “Bath of Youth” and a relict yew grove. The river has polished “cauldrons” — round potholes — in the rock floor over the centuries; the Bath is the largest of them, and the water stays cold all year. The tour is a loop along the bottom and the rim, about three hours; in the rainy season the gorge closes: the mountain river rises to knee height within an hour. No appetite for three hours — take the short loop to the cascade and back.",
    "tips": "After rain the stones are slippery; in heat the canyon is cool — take a light jacket.",
    "price_hint": "trail entry ~200 ₽"
   },
   "ayu-dag": {
    "name": "Ayu-Dah and Partenit",
    "region": "Alushta · Partenit",
-   "description": "“Bear Mountain” — an extinct volcano-laccolith 577 m high. A trail along the ridge with views of Partenit, Artek and the whole line of the Southern Coast.",
+   "description": "The “Bear-Mountain” — an extinct laccolith volcano, 577 m high. A ridge trail with views over Partenit, Artek and the whole line of the southern coast. On the saddle stand the ruins of a medieval monastery and a spring; the trail itself runs along the western spur. From the summit, in clear weather, the whole southern coast lies open with the Main Ridge behind it — a panorama worth the climb. The mountain is protected: stay on the marked path and do not linger till dusk.",
    "tips": "The climb from Partenit is waymarked; there is no water on the mountain — at least 1.5 l per person.",
    "price_hint": "free"
   },
   "uchan-su": {
    "name": "Uchan-Su waterfall",
    "region": "Yalta · Uchan-Su",
-   "description": "The highest waterfall in Crimea (98 m) on the slope of Ai-Petri, 7 km from Yalta. The Botkin and Shtangeyev trails are nearby.",
+   "description": "The highest waterfall in Crimea (98 m) on the Ai-Petri slope, 7 km from Yalta. Nearby run the Botkin and Shtangeev trails. In spring the falls are a full torrent spraying to the viewing platform; in August a thin veil — but the path is dry and open to all. From the cascade the old Botkin path climbs through the forest to the Fairy Glade, and the lower cascade is visible right from the road — five minutes down the slope. The viewing platform hangs over the very edge: hold children by the hand.",
    "tips": "Full of water in spring and after rain; in summer a thin stream, in winter it sometimes freezes.",
    "price_hint": "free"
   },
   "mangup": {
    "name": "Mangup-Kale",
    "region": "Bakhchisaray · Mangup",
-   "description": "Capital of the medieval principality of Theodoro on a 120-hectare plateau: a citadel, cave churches, a Karaite cemetery and panoramas in four directions.",
+   "description": "The capital of the medieval principality of Theodoro on a 120-hectare plateau: the citadel, cave churches, a Karaite cemetery and panoramas to all four horizons. Theodoro withstood sieges and fell in 1475 — nobody has lived on the plateau since. The climb follows the old mule path from Khodzha-Sala; up top, the loop runs past the citadel, the cave churches and the foundations of the prince's mansion. On the opposite slope — the ancient Karaite necropolis cut into the rock; it is viewed from the path.",
    "tips": "The climb from Khodzha-Sala village takes 1–1.5 hours; on the plateau there is neither shade nor water.",
    "price_hint": "plateau entry ~200 ₽",
    "hours": "9:00–17:00, the box office until 16:30; in bad weather the “cave towns” close"
@@ -762,7 +778,7 @@
   "eski-kermen": {
    "name": "Eski-Kermen",
    "region": "Bakhchisaray · Eski-Kermen",
-   "description": "The “Old Fortress” — a cave town of the 6th–14th centuries: more than 300 rooms cut into the rock, a siege well, temples and reliefs.",
+   "description": "The “Old Fortress” — a cave town of the 6th–14th centuries: over 300 chambers cut into the rock, a siege well, churches and reliefs. The plateau was carved out for Byzantium as a shield against the steppe: the town was never taken by storm — its people left when the water ran out. The main artefact is the carved “well”, deeper than a hundred metres: climb down as much as you like, there is no water left. The loop takes under an hour: cave churches, the basilica, the “quarantine” cell — there are more sign boards on site than in any guidebook.",
    "tips": "A torch helps in the caves; it is easier to climb from the south side, past Zaleskoye.",
    "price_hint": "plateau entry ~200 ₽",
    "hours": "9:00–18:00, the upper box office until 16:00, the lower until 17:00; closed in bad weather"
@@ -770,7 +786,7 @@
   "chufut-kale": {
    "name": "Chufut-Kale and the Dormition Cave Monastery",
    "region": "Bakhchisaray · Chufut-Kale",
-   "description": "A Jewish cave town on a table mountain: kenesas, the mausoleum of Djanike-Khanym and the working Dormition Monastery in the Maryam-Dere gorge below.",
+   "description": "The Karaite cave town on a table mountain: kenasa, the mausoleum of Dzhanike-Khanym, and the active Dormition monastery in the Mariam-Dere gorge below. The town was inhabited until the end of the 18th century — when the residents were resettled downhill, the houses, kenasa and quarries “froze” in place. The tour is a standard loop of an hour and a half, with a path leading down to the monastery. The plateau has no shade and no water: pack exactly as you would for Mangup.",
    "tips": "25 minutes uphill through the gorge from the Khan's Palace; the monastery asks for covered clothing.",
    "price_hint": "town site ~300 ₽, the monastery is free",
    "hours": "9:00–18:00 (April–October), 9:00–17:00 (November–March); in bad weather the “cave towns” close"
@@ -778,7 +794,7 @@
   "neapolis": {
    "name": "Neapolis Scythica (Scythian Neapolis)",
    "region": "Simferopol · Petrovski Rocks",
-   "description": "Capital of the Late Scythian kingdom (3rd century BC – 3rd century AD) inside Simferopol: defensive walls, a tower, the mausoleum of king Scilurus and a view over the city.",
+   "description": "The capital of the Late Scythian kingdom (3rd c. BC — 3rd c. AD) within Simferopol: defence walls, a tower, the mausoleum of King Skilurus and a view over the city. The fortress was built as a capital “the Greek way”: wide residential quarters, towers, a ceremonial palace with a sanctuary. Excavations here have run for more than a century: some is reconstructed for the public, some still looks like an archaeologists' field camp — which is what people love the site for. A pavilion with finds stands at the entrance; the whole visit fits into forty minutes.",
    "tips": "Easy to combine with the centre of Simferopol: 15 minutes on foot from the Salgir embankment.",
    "price_hint": "entry ~200 ₽",
    "hours": "Tue–Sun 10:00–18:00 (in winter Wed–Sun 9:00–17:00), closed Mondays"
@@ -786,7 +802,7 @@
   "taygan": {
    "name": "Taygan safari park",
    "region": "Belogorsk · Taygan",
-   "description": "The largest lion park in Europe: more than 50 animals in open terrain by the Taygan reservoir, plus a zoo and a children's area.",
+   "description": "Europe's largest lion park: 50+ animals on open ground by the Taigan reservoir, plus a zoo and a kids' zone. The lions live in large enclosures, grouped “by families”; the predator territory is entered only by bus with a guide, on schedule. Besides the cats there are bears, wolves, hoofed animals and a bird yard — the full loop takes half a day. After lunch the beasts nap and retire to the shade: watching them is a morning business.",
    "tips": "The lion area is visited only with a guide; feeding or touching the animals is forbidden.",
    "price_hint": "adult ticket ~2,500 ₽, child ~1,500 ₽",
    "hours": "8:00–20:00 (summer), 8:00–16:00 (winter), the box office until 19:00"
@@ -794,21 +810,21 @@
   "meganom": {
    "name": "Meganom cape",
    "region": "Sudak · Meganom",
-   "description": "The sunniest and driest cape of Crimea: yellow hills, empty bays, a solar power station and “places of power” with stone circles.",
+   "description": "The sunniest and driest cape of Crimea: yellow hills, empty bays, a solar plant and “places of power” with stone rings. The cape is a landscape of wind and sun: the sea rings clear over the stony bottom, and there is no shade on the shore at all. People go to the rings to photograph rather than to believe. Once the wind rises — leave: the “saddle” turns into an ironing board, and the dirt road after rain into a bog.",
    "tips": "The dirt road from Sudak is passable for any car in dry weather; no water, no shade — take a supply.",
    "price_hint": "free, jeep tour from 2,000 ₽"
   },
   "klementyev": {
    "name": "Klementyev Mountain (Uzun-Syrt)",
    "region": "Koktebel · Uzun-Syrt",
-   "description": "The cradle of Soviet gliding: a mountain with ideal lift above Koktebel, where hang gliders and paragliders have flown since the 1920s.",
+   "description": "The cradle of Soviet gliding: a mountain with perfect lift currents above Koktebel, flown by hang- and paragliders since the 1920s. The ridge catches wind from both sides of the bay — which is why even a tandem with an instructor starts here: take-off from the crest, landing on the Koktebel beach. Flight time is agreed with the local clubs: the weather on the ridge changes faster than the forecast can update. There is no cafe and no shade up top — bring your own snack.",
    "tips": "They fly in a steady southerly wind; check the weather with the local clubs in advance.",
    "price_hint": "a flight with an instructor from 4,000 ₽, the climb is free"
   },
   "solnechnaya-dolina": {
    "name": "Solnechnaya Dolina winery",
    "region": "Sudak · Solnechnaya Dolina",
-   "description": "An estate of 1888 in the Arkhaderesse valley: local varieties Dzhevat-Kara and Ekim-Kara and the legendary “Black Doctor” and “Black Colonel”.",
+   "description": "A winery of 1888 in the Arkhaderesse valley: autochthonous Dzhevat-Kara and Ekim-Kara grapes, plus the legendary “Black Doctor” and “Black Colonel”. The vines stand on the valley's southern slopes, and “autochthonous” here is not marketing but farming practice: the old local varieties are kept almost like a museum stock. Before the tasting, step out to the terrace above the vineyard: the valley lies open like a palm — the best frame of the whole route.",
    "tips": "Tastings by booking; if you drive — spit it out or take mini portions.",
    "price_hint": "tour with tasting from 1,200 ₽",
    "hours": "tours daily at 10:00, 11:00, 13:00, 14:00, 15:00 and 16:00"
@@ -816,77 +832,77 @@
   "kazantip": {
    "name": "Kazantip cape and Shchelkino",
    "region": "Shchelkino · Kazantip",
-   "description": "A round “cauldron” cape in the Sea of Azov: steppe reserve, rocks, sand beaches on both sides of the spit and the best kite spots of Crimea.",
+   "description": "A ring-shaped “kettle” cape on the Sea of Azov: protected steppe, rocks, sandy bays on both sides of the isthmus and the best kitespots in Crimea. The cape got its name from the bay's shape: a narrow isthmus, a bowl of water, a rim of hills where wild tulips bloom in spring. On the spit side the sea is “childish”, knee-deep; on the bay side it is deeper and with a wave, and kite schools teach all year. The unfinished power plant on the horizon has long been a monument to “the end of the world” — the second photo after the kettle itself.",
    "tips": "The sea at Shchelkino is shallow and warm already in May; in the reserve stay on the paths and make no fires.",
    "price_hint": "free, kite lessons from 3,000 ₽"
   },
   "tarkhankut": {
    "name": "Tarkhankut lighthouse",
    "region": "Chernomorskoye · Tarkhankut",
-   "description": "The westernmost point of the peninsula: a working lighthouse of 1816 on a cliff, feather-grass steppe and the “Alley of Leaders” — an underwater museum of busts at 12 m.",
+   "description": "The westernmost point of the peninsula: an operating lighthouse of 1816 on the cliff, feather-grass steppe, and the “Alley of Leaders” — an underwater museum of busts at 12 m. Local divers lowered the busts to the bottom as a joke — and the joke became the cape's main underwater attraction. From the platform above the lighthouse, on a clear day, you can see the white cliffs of Atlesh. Take water and food with you: there is nothing at the lighthouse, and the nearest shops are in the village.",
    "tips": "The sunsets here are the “longest” in Crimea; the wind is strong even in summer — a windbreaker is mandatory.",
    "price_hint": "free, diving from 4,000 ₽"
   },
   "olenivka": {
    "name": "Olenivka and Karadzhyn bay",
    "region": "Chernomorskoye · Olenivka",
-   "description": "A wide sand beach and a shallow salt lagoon right by the water: warm sea, a windsurf and kite school, campsites and almost no infrastructure.",
+   "description": "A wide sandy beach and a shallow salty lagoon right by the water: warm sea, a windsurf and kite school, campgrounds and minimal infrastructure. Olenivka is the “capital of wind”: the afternoon breeze fills the bay by noon, and the schools teach all year, “winter groups” included. The bay is shallow and sandy and warms early; in the evening life moves to the embankment — for ice cream and sunsets. There are small shops in the village, but do not expect city service: that is the point.",
    "tips": "The best wind is in July–August during the day; trust the village shops little, carry extra water.",
    "price_hint": "beach free, kite gear rental from 2,500 ₽"
   },
   "sasyk-sivash": {
    "name": "Pink lake Sasyk-Sivash",
    "region": "between Yevpatoria and Saki",
-   "description": "The largest lake of the peninsula: in heat the brine turns pink from dunaliella algae, and salt mounds of old works dry out along the shores.",
+   "description": "The largest lake of the peninsula: in the heat the brine turns pink from dunaliella algae, and salt mounds of old works dry out along the shores. In summer evaporation is fiercest and the bays crust over with white salt — walking on it feels like walking on fresh snow. Salt is sold along the road: take the coarse crystalline, “lake” salt, not rock. The lake's two souvenirs are the salt and the flamingos in the reflection; the third is the evening mosquitoes on the shore — do not forget repellent.",
    "tips": "The pink colour holds from June to August and is brightest at a windless noon; you cannot enter the salt pans.",
    "price_hint": "free, parking by the Yevpatoria — Saki road"
   },
   "bakalskaya-kosa": {
    "name": "Bakalskaya spit",
    "region": "Razdolnoye district · Steregushcheye",
-   "description": "A sand sickle between the Karkinit Bay and Bakalskoye lake — the northernmost beach point of the peninsula and a landscape park.",
+   "description": "A sand sickle between the Karkinits Bay and the Bakals Lake — the northernmost beach point of the peninsula and a landscape park. Every storm redraws the spit: the isthmus you crossed in May may lie a kilometre away in July. From the sea side — shallows with warm water; from the lake side — silty lagoons and bath-warm water. No water, no shade, no shops: everything into the trunk, all litter taken back — “wild” rest on the spit means exactly that.",
    "tips": "Storms keep reshaping the spit: cross the narrow part light and watch for the wind picking up.",
    "price_hint": "passage free, a spot in the motorhome camp is paid"
   },
   "donuzlav": {
    "name": "Donuzlav: kiting and windsurfing",
    "region": "Mirnyy · Novoozyornoye",
-   "description": "The deepest lake of Crimea, with flat water in the lagoon and a wave from the sea side — the main kite area of the west coast.",
+   "description": "The deepest lake of Crimea with flat water in the lagoon and a wave from the sea side — the main kite area of the western coast. A narrow spit once separated the lake from the sea: Soviet attempts to “bring the fleet out” left a wide channel across which the wind now roams. On the lake side — a flat “table” for beginners; on the sea side — a wave and “candles” for pros; between them — a spit with neither shade nor water. In the evening the lake turns gold: fewer people, and the shots lose nothing to the sea ones.",
    "tips": "A steady wind in spring and autumn; beginners are calmer on the lake side of the spit than on the sea side.",
    "price_hint": "gear rental from 2,000 ₽/hour, an instructor lesson costs more"
   },
   "belyaus": {
    "name": "Belyaus spit",
    "region": "Chernomorsky district · Znamenskoye",
-   "description": "Ten kilometres of almost white sand and turquoise water on the spit that separates Donuzlav from the sea — “Crimean Maldives” without infrastructure.",
+   "description": "Ten kilometres of almost white sand and turquoise water on the spit that separates Donuzlav lake from the sea — “the Crimean Maldives” without any infrastructure. The “Maldives” are a photographer's illusion: no cafes, no rentals, no toilets — but the colour of the water is real. At noon the sand heats up so much that people cross to the water in slippers. The dunes wander with the wind, and overnight a tent can be buried to its bars: sleep only in the equipped campground.",
    "tips": "No shade, no shops: bring water, food and an umbrella; overnight only in an equipped campsite.",
    "price_hint": "free, a wild beach without service"
   },
   "mezhvodnoe": {
    "name": "Mezhvodnoye: bays and healing lakes",
    "region": "Chernomorsky district · Mezhvodnoye",
-   "description": "A quiet resort on Tarkhankut between Yarylgach bay and the Yarylgach and Dzharylgach lakes: shell sand beaches and the same brine and mud as in Saki.",
+   "description": "A quiet resort on Tarkhankut, between the Yarylgach bay and the Dzharylgach and Yarylgach lakes: shell beaches and the same medicinal brine and mud as in Saki. The bay lies open to westerlies, but by noon the water is warm as milk and the entry is sandy. From the spit, on a clear day, the Tarkhankut lighthouse is visible. Serious procedures belong to the sanatorium; the lake is DIY: a path to the shore, mud on the shoulders, half an hour — then wash it off in the sea.",
    "tips": "The entry into the water is shallow and stone-free — convenient with toddlers; for mud, walk to Dzharylgach lake north-east of the village.",
    "price_hint": "beaches free, spa procedures in the sanatorium from 800 ₽"
   },
   "kenasy": {
    "name": "Karaite Kenasses and Little Jerusalem",
    "region": "Yevpatoria · Karaite street",
-   "description": "The temple complex of Crimean Karaites with marble courtyards and vine galleries — the core of the “Little Jerusalem” walking route.",
+   "description": "The temple complex of the Crimean Karaites with marble courtyards and grape arbours — the core of the “Little Jerusalem” walking route. There are two kenasas — a summer one and a winter one: the community lived and prayed by the season. Inside there is no painting: carved arches, coloured glass and the Holy Book — the “religion of Scripture” reads in the very restraint of the interior. The kenasas are still in use: during prayers the tours stand still, phone on silent.",
    "tips": "In one hour you can see the kenesas, Juma-Dzhami mosque and the Gezslev gate nearby — the whole old town is five minutes away.",
    "price_hint": "kenasses entry ~300 ₽, the walking route is free"
   },
   "okunevka": {
    "name": "Okunivka: bay under the cliff",
    "region": "Chernomorsky district · Okunivka",
-   "description": "A village on a seventeen-metre cliff of the west coast: a wide sand bay below, kite camps and sunsets straight into the sea.",
+   "description": "A village on a seventeen-metre cliff above the western shore: a wide sandy bay below, kite camps and sunsets straight into the sea. The spot lives on both sides: flat water in the bay, a wave and “candles” above the brow. Wind turbines turn over the village — the locals count the wind as their main resource. The beach is reached by gully paths; at noon keep to the cliff's shadow side — by evening the shade rolls right onto the sand.",
    "tips": "Paths lead down to the water along the cliff — shoes with a tread needed; the nearest ATM is in Chernomorskoye.",
    "price_hint": "beach free, a kite school lesson from 3,000 ₽"
   },
   "krym-miniature": {
    "name": "“Crimea in Miniature” in Yevpatoria",
    "region": "Yevpatoria · Dendropark",
-   "description": "Some fifty models of palaces, fortresses and churches of the peninsula in one park — a quick way to show children all of Crimea at once.",
+   "description": "Fifty models of the peninsula's palaces, fortresses and temples in one park — the quick way to show children all of Crimea at once. The models are reproduced from photographs and measurements, some with interiors worked out in detail. They are laid out like a map: from Tarkhankut to Foros — the whole of Crimea in an hour's walk. Every model comes with a history plaque; after such reconnaissance, real places are more interesting to see.",
    "tips": "Next to it are the dendropark and the fairy-tale alley with lighting — in the evening it is more interesting than in the midday heat.",
    "price_hint": "adult ~800 ₽, child ~500 ₽",
    "hours": "9:00–22:00 (May–September), 9:00–20:00 (October–April)"

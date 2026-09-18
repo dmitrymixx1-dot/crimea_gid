@@ -48,7 +48,7 @@ inline-обработчики вида `onerror=` во фронтенде зап
 **Ответ 200:**
 
 ```json
-{"ok": true, "name": "Крым.Гид", "version": "1.11.0"}
+{"ok": true, "name": "Крым.Гид", "version": "1.12.0"}
 ```
 
 | Поле | Тип | Описание |
@@ -360,7 +360,22 @@ inline-обработчики вида `onerror=` во фронтенде зап
 {
   "online": true,
   "updated_at": "2026-09-15T22:00:00+03:00",
-  "sources": [{"id": "tass", "name": "ТАСС"}, {"id": "tg-rbc", "name": "РБК · TG"}],
+  "sources": [
+    {
+      "id": "tass",
+      "name": "ТАСС",
+      "description": "Федеральное новостное агентство",
+      "url": "https://tass.ru/rss/v2.xml",
+      "type": "rss"
+    },
+    {
+      "id": "tg-rbc",
+      "name": "РБК · TG",
+      "description": "Публичное превью телеграм-канала РБК",
+      "url": "https://t.me/s/rbc",
+      "type": "telegram"
+    }
+  ],
   "failed_sources": ["News.ru · TG"],
   "total": 80,
   "crimea_total": 16,
@@ -383,6 +398,7 @@ inline-обработчики вида `onerror=` во фронтенде зап
 | Поле | Описание |
 |---|---|
 | `online` | `true` — хотя бы один источник ответил; `false` — показан кэш/офлайн-снапшот |
+| `sources[]` | список источников из `sources.json`: `id`, `name`, `description`, `url`, `type` — по ним фронт рисует блок «Об источниках» под лентой (1.12.0); `description` — подпись издания, `type` — `rss` / `telegram` |
 | `failed_sources` | имена источников, не ответивших при последнем опросе |
 | `total` / `crimea_total` | всего элементов / из них про Крым (`crimea_score > 0`) |
 | `items[].crimea_score` | баллы «крымскости» (маркеры городов и географии) |

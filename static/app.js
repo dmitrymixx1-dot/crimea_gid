@@ -412,6 +412,47 @@ function foreignHeadlinesNote() {
     </p>`;
 }
 
+/* Блок «Об источниках» (под лентой): вывеска, подпись, тип и ссылка.
+   Описание приходит из `sources.json` через `/api/news` — карман для
+   редакторских комментариев оно носило зря, теперь это текст интерфейса:
+   на английском экране его переводит обходчик, покрытие подписей держит
+   `source_labels()` (tools/i18n_extract.py). Статус — из `failed_sources`:
+   имя источника в списке упавших превращает карточку в «не отвечает». */
+function sourceCardHTML(s, failed) {
+  const down = failed.includes(s.name);
+  const type = s.type === "telegram" ? "Telegram" : s.type === "rss" ? "RSS" : "";
+  return `
+    <div class="source-card${down ? " source-down" : ""}">
+      <div class="source-top">
+        <span class="source-badge">${esc(s.name)}</span>
+        ${type ? `<span class="chip">${type}</span>` : ""}
+        ${down ? `<span class="chip chip-sun">${t("не отвечает")}</span>` : ""}
+      </div>
+      ${s.description ? `<p class="source-desc">${esc(s.description)}</p>` : ""}
+      ${s.url ? `<a class="source-link" href="${esc(s.url)}" target="_blank" rel="noopener">Открыть источник ↗</a>` : ""}
+    </div>`;
+}
+
+function paintNewsSources() {
+  const host = $("#news-sources");
+  if (!host || !state.news) return;
+  const sources = state.news.sources || [];
+  if (!sources.length) { host.innerHTML = ""; return; }
+  const nRss = sources.filter(s => s.type !== "telegram").length;
+  host.innerHTML = `
+    <section class="section sources-block">
+      <div class="section-head">
+        <h2>📡 Об источниках</h2>
+        <span class="sub">${t("Ленты: {rss} RSS и {tg} Telegram · опрос каждые {n} мин",
+          { rss: nRss, tg: sources.length - nRss, n: 15 })}</span>
+      </div>
+      <div class="sources-grid">${sources.map(s => sourceCardHTML(s, state.news.failed_sources || [])).join("")}</div>
+      <p class="muted sources-note">
+        Сервер опрашивает ленты и кэширует их: заголовки — тексты изданий, ссылка ведёт на публикацию.
+      </p>
+    </section>`;
+}
+
 function newsItemHTML(it) {
   const topics = (it.topics || [])
     .map(t => `<span class="chip ${t === "safety" ? "chip-sun" : ""}">${TOPIC_LABELS[t] || t}</span>`)
@@ -1149,6 +1190,7 @@ async function renderNews(refresh = false) {
       <div id="news-offline"></div>
       <div class="filter-row" id="news-topics" style="margin-bottom:16px"></div>
       <div id="news-list"></div>
+      <div id="news-sources"></div>
     </div>`;
   $("#news-refresh").addEventListener("click", () => renderNews(true));
   $("#news-search").addEventListener("input", e => {
@@ -1229,6 +1271,7 @@ function renderNewsBody() {
   $("#news-list").innerHTML = items.length
     ? items.map(newsItemHTML).join("")
     : `<div class="empty"><div class="big">📭</div>${q ? t("Ничего не нашлось по запросу.") : t("По этой теме пока пусто.")}</div>`;
+  paintNewsSources();
   localize();
 }
 

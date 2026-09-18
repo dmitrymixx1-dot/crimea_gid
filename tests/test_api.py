@@ -125,6 +125,11 @@ def test_news_endpoint(client):
     assert len(d["items"]) <= 5
     assert d["online"] in (True, False)
     assert d["crimea_total"] >= 0
+    # «Об источниках» (1.12.0): карточки блока строятся из этих полей,
+    # без подписи и адреса блок деградирует до голых вывесок.
+    for s in d["sources"]:
+        assert set(s) >= {"id", "name", "description", "url", "type"}
+        assert s["description"], f"источник {s['id']} пришёл без подписи"
 
 
 def test_weather_endpoint(client):

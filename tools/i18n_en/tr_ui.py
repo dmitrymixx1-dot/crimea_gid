@@ -211,6 +211,18 @@ UI = {
         "Headlines stay in Russian: we do not translate other publications' text —"
         " the link goes to the original."
     ),
+    # Блок «Об источниках» под лентой (1.12.0): вывеска, тип, статус, подпись.
+    "📡 Об источниках": "📡 About the sources",
+    "Ленты: {rss} RSS и {tg} Telegram · опрос каждые {n} мин": (
+        "Feeds: {rss} RSS and {tg} Telegram · polled every {n} min"
+    ),
+    "не отвечает": "not responding",
+    "Открыть источник ↗": "Open the source ↗",
+    "Сервер опрашивает ленты и кэширует их: заголовки — тексты изданий,"
+    " ссылка ведёт на публикацию.": (
+        "The server polls the feeds and caches them: headlines are the"
+        " publishers' own texts, and the link leads to the original."
+    ),
     # --- модалка ---
     "☀️ лето": "☀️ summer",
     "🌸 весна": "🌸 spring",
@@ -497,6 +509,28 @@ EXTRA_LABELS = {
     "РБК": "RBC",
     "РБК · TG": "RBC · TG",
     "Крым.Цифровой": "Crimea.Digital",
+    # Подписи изданий в блоке «Об источниках»: description из sources.json.
+    # Ключи диктует source_labels() — новая строка в данных требует
+    # перевода здесь же, под вывеской.
+    "Федеральное новостное агентство": "Federal news agency",
+    "Новости экономики и общества": "Business and society news",
+    "Общие новости дня": "General daily news",
+    "Крупнейшее крымское новостное агентство": "The largest Crimean news agency",
+    "Крымский региональный портал": "Crimean regional portal",
+    "Крымская редакция РИА Новости: события полуострова": (
+        "RIA Novosti Crimea desk: peninsular events"
+    ),
+    "Новостной портал Севастополя": "Sevastopol news portal",
+    "Публичное превью телеграм-канала (парсится без ключа)": (
+        "Public preview of the Telegram channel (parsed without a key)"
+    ),
+    "Публичное превью телеграм-канала РБК": "Public preview of the RBC Telegram channel",
+    "Публичное превью телеграм-канала News.ru": (
+        "Public preview of the News.ru Telegram channel"
+    ),
+    "Публичное превью телеграм-канала РИА Новости Крым": (
+        "Public preview of the RIA Novosti Crimea Telegram channel"
+    ),
     "🚗 На машине можно заехать в самые удалённые точки — смело включайте в маршрут пещеры, мысы и узкие горные дороги.": "🚗 By car you can reach even the most remote spots — put caves, capes and narrow mountain roads in the route without hesitation.",
     "🚌 Без машины ориентируйтесь на курортные города с разветвлённой сетью транспорта.": "🚌 Without a car, lean on resort towns with a wide transport network and keep the far-out places for a day with a driver.",
     # Голова причины: список тем фронт переводит поэлементно (tReason).
