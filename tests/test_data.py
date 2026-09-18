@@ -279,7 +279,12 @@ def test_western_crimea_is_no_longer_the_thin_one():
 def test_hours_present_for_ticketed_landmarks():
     """Часы работы указываем там, где график стабилен и публикуется музеем:
     дворцы, пещеры, парки. У «природных» точек их быть не должно —
-    честнее отсутствие поля, чем выдуманный график."""
+    честнее отсутствие поля, чем выдуманный график. Второй фильтр —
+    круглогодичность: `schedule` обязан покрывать все 12 месяцев, поэтому
+    место, закрытое на зиму (Старокрымская крепость), или объект с
+    плавающим графиком погоды (канатки Ай-Петри и Демерджи) остаются
+    без поля, пока оператор не опубликует годовой режим.
+    """
     items = {a["id"]: a for a in get_attractions()}
     for pid in (
         "lastochino",
@@ -292,8 +297,14 @@ def test_hours_present_for_ticketed_landmarks():
         "marble",
         "taygan",
         "chufut-kale",
+        "trip-trentyakov",
+        "kenasy",
     ):
         assert items[pid].get("hours"), f"{pid}: нет часов работы"
+    for pid in ("koktebel", "tarkhankut", "kazantip", "aipetri", "demerdji"):
+        assert not items[pid].get("hours"), (
+            f"{pid}: открытой территории или плавающему объекту часы не нужны"
+        )
     assert sum(1 for a in items.values() if a.get("hours")) >= 10
 
 

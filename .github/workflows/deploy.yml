@@ -13,6 +13,10 @@
 # Репетиция (dry_run=true при ручном запуске) проходит весь путь до SSH:
 # тесты релиза, проверка секретов и `deploy.sh --dry-run`. Она нужна, чтобы
 # сценарий выката можно было проверить до того, как появились сервер и ключи.
+# Пока секрет DEPLOY_* нет совсем, сервер считается не подключённым: тег
+# проходит preflight и репетицию, а выкат пропускается с notice — краснеть
+# релизу из-за отсутствующего сервера незачем. Частично заданные секреты —
+# ошибка: это уже не «не настроено», а «настроено криво».
 name: Deploy
 
 on:
@@ -89,21 +93,33 @@ jobs:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
         run: |
+          have=0
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH DEPLOY_SSH_KEY; do
+            [ -z "${!var:-}" ] || have=$((have + 1))
+          done
+          if [ "$have" = "4" ]; then
+            echo "DEPLOY_ENABLED=true" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if [ "$have" = "0" ] && [ "$DRY" != "true" ]; then
+            # Секретов нет совсем — сервер не подключён. Это состояние
+            # проекта, а не ошибка релиза: тег остаётся зелёным.
+            echo "::notice::секреты DEPLOY_* не заданы — сервер не подключён; выкат пропущен, preflight и репетиция засчитаны. Добавьте секреты — и следующий тег пойдёт по-настоящему"
+            exit 0
+          fi
           missing=""
           for var in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH DEPLOY_SSH_KEY; do
             [ -n "${!var:-}" ] || missing="$missing $var"
           done
-          if [ -n "$missing" ]; then
-            if [ "$DRY" = "true" ]; then
-              echo "::warning::репетиция: не заданы секреты:$missing — настоящий выкат бы не прошёл"
-              exit 0
-            fi
-            echo "::error::не заданы секреты:$missing — Settings → Secrets and variables → Actions"
-            exit 1
+          if [ "$DRY" = "true" ]; then
+            echo "::warning::репетиция: не заданы секреты:$missing — настоящий выкат бы не прошёл"
+            exit 0
           fi
+          echo "::error::не заданы секреты:$missing — Settings → Secrets and variables → Actions (или не задавайте ни одного, если сервер ещё не подключён)"
+          exit 1
 
       - name: Настроить SSH
-        if: ${{ (github.event.inputs.dry_run || 'false') != 'true' }}
+        if: ${{ (github.event.inputs.dry_run || 'false') != 'true' && env.DEPLOY_ENABLED == 'true' }}
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
@@ -121,7 +137,7 @@ jobs:
           chmod 600 ~/.ssh/known_hosts
 
       - name: Выкатить
-        if: ${{ (github.event.inputs.dry_run || 'false') != 'true' }}
+        if: ${{ (github.event.inputs.dry_run || 'false') != 'true' && env.DEPLOY_ENABLED == 'true' }}
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -142,7 +158,7 @@ jobs:
               "cd '$DEPLOY_PATH' && EXPECT_VERSION='$expect' ./deploy/deploy.sh '$REF'"
 
       - name: Что получилось
-        if: ${{ success() && (github.event.inputs.dry_run || 'false') != 'true' }}
+        if: ${{ success() && (github.event.inputs.dry_run || 'false') != 'true' && env.DEPLOY_ENABLED == 'true' }}
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}

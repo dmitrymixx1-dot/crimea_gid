@@ -767,6 +767,24 @@ def test_deploy_workflow_does_not_run_two_deploys_at_once():
     assert wf["concurrency"]["cancel-in-progress"] is False
 
 
+def test_deploy_workflow_skips_gracefully_without_a_server():
+    """Релиз не должен краснеть из-за не подключённого сервера: когда
+    секретов нет совсем, выкат пропускается с notice (workflow зелёный),
+    а частичная настройка — по-прежнему ошибка. Шаги SSH гейтятся
+    флагом DEPLOY_ENABLED, который выставляет проверка секретов."""
+    steps = deploy_workflow()[0]["jobs"]["deploy"]["steps"]
+    check = next(s for s in steps if s.get("name") == "Проверить секреты деплоя")
+    run = check["run"]
+    assert 'have" = "0"' in run and "выкат пропущен" in run
+    assert "DEPLOY_ENABLED=true" in run
+    assert 'echo "::error::не заданы секреты' in run
+    for name in ("Настроить SSH", "Выкатить", "Что получилось"):
+        step = next(s for s in steps if s.get("name") == name)
+        # PyYAML 1.1 читает ключ `if:` как булев True — сверяем обе записи.
+        guard = str(step.get("if", step.get(True, "")))
+        assert "env.DEPLOY_ENABLED" in guard, name
+
+
 def test_deploy_script_is_executable_and_sane():
     import os
     import re
