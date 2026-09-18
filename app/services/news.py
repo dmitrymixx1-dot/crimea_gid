@@ -428,7 +428,21 @@ class NewsService:
         return {
             "online": self._cache["online"],
             "updated_at": datetime.now(UTC).astimezone().isoformat(),
-            "sources": [{"id": s["id"], "name": s["name"]} for s in self._sources],
+            # Источники — не только вывески: у каждого есть подпись и адрес.
+            # Экран «Об источниках» показывает их целиком; `description`
+            # переводится словарём `labels` (контракт держит source_labels()).
+            # Кроме id/name поля опциональны: синтетические источники в
+            # тестах живут без подписей, и молчать честнее, чем падать.
+            "sources": [
+                {
+                    "id": s["id"],
+                    "name": s["name"],
+                    "description": s.get("description", ""),
+                    "url": s.get("url", ""),
+                    "type": s.get("type", ""),
+                }
+                for s in self._sources
+            ],
             "failed_sources": self._cache["failed"],
             "total": len(items),
             "crimea_total": sum(1 for x in items if x.get("crimea_score", 0) > 0),

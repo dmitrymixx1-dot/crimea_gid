@@ -296,6 +296,35 @@ def test_source_badges_are_translatable(bundle):
     assert "News.ru" not in i18n_extract.source_labels(), "латиница не ключ"
 
 
+def test_source_captions_are_translatable(bundle):
+    """Подписи изданий — текст интерфейса с 1.12.0 (блок «Об источниках»).
+
+    До этого `description` в sources.json был комментарием для редакторов
+    и перевода не требовал. Появился экран, где его читает пользователь —
+    значит, русская подпись обязана иметь английскую пару; латинские
+    подписи (как и вывески) через has_cyrillic не попадают в контракт.
+    """
+    data = json.loads((ROOT / "app" / "data" / "sources.json").read_text("utf-8"))
+    ui = {**bundle["labels"], **bundle["ui"]}
+    captions = 0
+    for s in data:
+        desc = s.get("description") or ""
+        if not re.search(r"[а-яё]", desc):
+            continue
+        assert desc in ui, f"подпись источника {desc!r} не переведена"
+        assert not re.search(r"[а-яё]", ui[desc]), f"в переводе {desc!r} кириллица"
+        captions += 1
+    assert captions >= 8, f"подписей подозрительно мало: {captions}"
+
+    # Контракт диктует инструмент, а не список в тесте: новая подпись
+    # в sources.json обязана потребовать перевода сама.
+    sys.path.insert(0, str(ROOT / "tools"))
+    import i18n_extract  # noqa: PLC0415
+
+    assert "Федеральное новостное агентство" in i18n_extract.source_labels()
+    assert data[0]["description"] in i18n_extract.source_labels()
+
+
 def test_module_labels_are_present(bundle):
     """Подписи модулей фронта: их не видит статический сбор ключей.
 

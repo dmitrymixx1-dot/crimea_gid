@@ -294,6 +294,24 @@ button { font: inherit; cursor: pointer; }
 .news-title a:hover { color: var(--sea-dark); }
 .news-summary { font-size: 13.5px; color: #40586c; margin: 0 0 8px; }
 .news-topics { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ---------- блок «Об источниках» (низ ленты) ---------- */
+.sources-block { margin-top: 26px; }
+.sources-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px;
+}
+.source-card {
+  background: var(--card); border-radius: var(--r); padding: 14px 16px;
+  box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 8px;
+  border: 1px solid transparent;
+}
+.source-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.source-desc { margin: 0; font-size: 13px; color: #40586c; flex: 1; }
+.source-link { font-size: 12.5px; font-weight: 600; color: var(--sea-dark); text-decoration: none; }
+.source-link:hover, .source-link:focus-visible { text-decoration: underline; }
+/* Источник не ответил: карточку не прячем (её показываем честно), глушим. */
+.source-down { opacity: 0.7; border-color: var(--sun-soft); background: var(--sun-soft); }
+.sources-note { margin: 14px 0 0; font-size: 12.5px; }
 .empty {
   text-align: center; padding: 60px 20px; color: var(--muted); background: var(--card);
   border-radius: var(--r); box-shadow: var(--shadow);
@@ -560,5 +578,7 @@ button { font: inherit; cursor: pointer; }
     box-shadow: none; border: 1px solid var(--line);
     break-inside: avoid;
   }
+  body.print-plan .source-card { box-shadow: none; border: 1px solid var(--line); }
+  body.print-plan .sources-block { display: none; }
   body.print-plan .rec-row { cursor: default; }
 }

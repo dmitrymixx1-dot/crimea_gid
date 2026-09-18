@@ -118,6 +118,41 @@ def test_region_mentions_crimea_places():
         assert "lorem" not in a["description"].lower(), a["id"]
 
 
+def test_descriptions_are_fleshed_out():
+    """Описание — не строка-питч, а то, что читают в модалке (1.12.0).
+
+    Карточка обрезана CSS line-clamp'ом, поэтому длина не ломает сетку;
+    короткая же «цитата» делала модалку тоньше карточки. Разбег символов
+    и минимум предложений тест читает из строки `description` в
+    [docs/data.md](../docs/data.md) — копия чисел в тесте однажды
+    разъехалась бы с правилом (тот же приём, что у границ координат).
+    Дубликаты описаний запрещены: копипаста «интересное место для всех»
+    проскакивает незаметно. Числа (цены, часы) живут в `price_hint`
+    и `hours` — описание с ними не соревнуется, «₽» в тексте считается
+    симптомом расхождения.
+    """
+    doc = Path(__file__).resolve().parents[1] / "docs" / "data.md"
+    row = re.search(r"^\|\s*`description`\s*\|.*$", doc.read_text("utf-8"), re.M)
+    assert row, "в docs/data.md нет строки `description`"
+    rng = re.search(r"(\d+)\s*[–-]\s*(\d+)", row.group(0))
+    min_sent = re.search(r"≥\s*(\d+)", row.group(0))
+    assert rng and min_sent, f"в строке `description` нет правил: {row.group(0)}"
+    low, high = (int(x) for x in rng.groups())
+    least = int(min_sent.group(1))
+    seen = {}
+    for a in get_attractions():
+        d = a["description"]
+        assert low <= len(d) <= high, f"{a['id']}: {len(d)} символов не в {low}–{high}"
+        sentences = [s for s in re.split(r"(?<=[.!?])\s+", d) if s.strip()]
+        assert len(sentences) >= least, f"{a['id']}: предложений {len(sentences)}"
+        assert d.rstrip().endswith((".", "!", "?", "»")), a["id"]
+        assert "…" not in d, f"{a['id']}: описание похоже на обрезанный текст"
+        assert "₽" not in d, f"{a['id']}: цена в описании — у неё своё поле"
+        if d in seen:
+            raise AssertionError(f"дубль описания: {a['id']} == {seen[d]}")
+        seen[d] = a["id"]
+
+
 def test_quiz_purpose_options_are_tags():
     quiz = get_quiz()
     for q in quiz["questions"]:

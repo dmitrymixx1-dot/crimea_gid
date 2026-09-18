@@ -162,3 +162,12 @@ def test_payload_shape(monkeypatch, tmp_path):
     item = out["items"][0]
     for key in ("id", "title", "link", "source", "published", "topics"):
         assert key in item
+
+    # Блок «Об источниках» (1.12.0): payload отдаёт не только вывески —
+    # у реальных источников есть подпись, адрес и тип. id/name гарантированы
+    # загрузчиком, остальное берётся из sources.json напрямую.
+    for s in out["sources"]:
+        assert s["id"] and s["name"], s
+        assert s["url"], f"источник {s['id']!r} без адреса"
+        assert s["description"], f"источник {s['id']!r} без подписи"
+        assert s["type"] in ("rss", "telegram"), s
